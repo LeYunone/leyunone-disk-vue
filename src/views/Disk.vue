@@ -1,58 +1,61 @@
 <template>
     【云盘】
-
+    <!--    <el-date-picker :disabled-date="publishDateAfter"-->
+    <!--                    type="date" placeholder="保存时间" v-model="upLoadParam.saveTime"-->
+    <!--                    value-format="YYYY-MM-DD"-->
+    <!--                    style="margin-left:10px; width: 24%;"></el-date-picker>-->
+    <!--    <el-tooltip class="item" effect="dark" content="选择保存时间：-->
+    <!--                            到某年某日自动过期;未选择默认：永久保存" placement="bottom">-->
+    <!--        <i style="font-size:24px" class="el-icon-bell">-->
+    <!--        </i>-->
+    <!--    </el-tooltip>-->
     <uploader :options="options"
               :file-status-text="statusText"
               @file-added="filesAdded"
               @file-success="onFileSuccess"
               class="uploader-example">
         <uploader-unsupport></uploader-unsupport>
-        <uploader-drop>
-            <uploader-btn>上传文件</uploader-btn>
-            <uploader-btn :directory="true">上传文件夹</uploader-btn>
-        </uploader-drop>
-        <uploader-list></uploader-list>
-    </uploader>
+        <el-dropdown>
+            <el-button type="primary">
+                上传
+                <el-icon class="el-icon--right">
+                    <arrow-down/>
+                </el-icon>
+            </el-button>
+            <template #dropdown>
+                <el-dropdown-menu>
+                    <el-dropdown-item>
+                        <uploader-btn >上传文件</uploader-btn>
+                    </el-dropdown-item>
+                    <el-dropdown-item>
+                        <uploader-btn :directory="true">上传文件夹</uploader-btn>
+                    </el-dropdown-item>
+                </el-dropdown-menu>
+            </template>
+        </el-dropdown>
 
-    <el-date-picker :disabled-date="publishDateAfter"
-                    type="date" placeholder="保存时间" v-model="upLoadParam.saveTime"
-                    value-format="YYYY-MM-DD"
-                    style="margin-left:10px; width: 24%;"></el-date-picker>
-    <el-tooltip class="item" effect="dark" content="选择保存时间：
-                            到某年某日自动过期;未选择默认：永久保存" placement="bottom">
-        <i style="font-size:24px" class="el-icon-bell">
-        </i>
-    </el-tooltip>
+
+        <uploader-list v-show="uploadPanel">
+        </uploader-list>
+    </uploader>
     <el-tabs v-model="default_fileList" @tab-click="tableClick">
-        <el-tab-pane label="全部文件" name="0"></el-tab-pane>
-        <el-tab-pane label="图片" name="1"></el-tab-pane>
-        <el-tab-pane label="音频" name="2"></el-tab-pane>
-        <el-tab-pane label="视频" name="3"></el-tab-pane>
-        <el-tab-pane label="文档" name="4"></el-tab-pane>
-        <el-tab-pane label="其他" name="5"></el-tab-pane>
-        <el-empty v-if="myFile == undefined || myFile.length <= 0"
-                  description="文件列表为空，请上传文件"></el-empty>
-        <el-table v-else
+        <el-table v-if="myFile.length>0"
                   :data="myFile"
-                  border
                   fit="false"
                   max-height="540px"
-                  style="margin-left: 10px;width: 650px">
+                  size="mini"
+                  style="font-size:9px;margin: 20px;width: 100%">
             <el-table-column
                     fixed
                     prop="name"
                     label="文件名"
-                    width="180px">
-            </el-table-column>
-            <el-table-column
-                    prop="fileTypeText"
-                    label="文件类型"
-                    width="100">
+                    show-overflow-tooltip="true"
+                    width="1300px">
             </el-table-column>
             <el-table-column
                     prop="createDt"
                     label="上传时间"
-                    width="100">
+                    width="100px">
             </el-table-column>
             <el-table-column
                     prop="saveDt"
@@ -60,15 +63,15 @@
                     width="100">
             </el-table-column>
             <el-table-column
-                    prop="fileSize"
-                    label="文件大小(KB)"
-                    width="140">
+                    prop="fileSizeText"
+                    label="文件大小"
+                    width="150px">
             </el-table-column>
             <el-table-column
                     fixed="right"
                     label="操作"
                     key="slot"
-                    width="100">
+                    width="200px">
                 <template #default='scope'>
                     <el-button @click="downFile(scope.row)" type="text" size="small">下载</el-button>
                     <el-button @click="deleteFile(scope.$index,scope.row)" type="text"
@@ -78,11 +81,6 @@
             </el-table-column>
         </el-table>
     </el-tabs>
-    <div class="page-card">
-        <el-pagination background layout="prev, pager, next" :current-page="query.pageIndex"
-                       :page-size="query.pageSize" :total="query.pageTotal"
-                       @current-change="handlePageChange"></el-pagination>
-    </div>
     <el-dialog title="登陆" v-model="login_user" width="30%">
         <el-form label-width="70px">
             <el-form-item label="用户名">
@@ -94,7 +92,7 @@
         </el-form>
         <template #footer>
                         <span class="dialog-footer">
-                            <el-button @click="diskDrawer = false">取 消</el-button>
+                            <el-button @click="login_user = false">取 消</el-button>
                             <el-button type="primary" @click="login">确 定</el-button>
                         </span>
         </template>
@@ -108,6 +106,7 @@
     export default {
         data() {
             return {
+                uploadPanel: false,
                 options: {
                     target: '/disk/file/uploadFile',
                     chunkSize: 1024 * 1024 * 5,  //3MB
@@ -148,14 +147,11 @@
                 upLoadParam: {
                     saveTime: "",
                 },
-                user_disk: false,
                 login_user: false,
-                diskDrawer: false,
                 pageData: {
                     index: 1,
                     size: 10
                 },
-                articleList: [],
                 fileList: [],
                 myFile: [],
                 fileTotalSize: 0,
@@ -180,6 +176,7 @@
             },
             //上传文件前
             filesAdded(file, event) {
+                this.uploadPanel = true;
                 //上传前校验该文件是否上传
                 let formData = new FormData();
                 formData.append('file', file.file);
@@ -250,7 +247,7 @@
                         method: "GET",
                         params: {
                             fileType: this.default_fileList,
-                            userId :Cookies.get('userId'),
+                            userId: Cookies.get('userId'),
                             type: this.orderType
                         }
                     }).then((res) => {
@@ -259,13 +256,11 @@
                             this.myFile = data.data.fileinfos.records;
                             this.query.pageTotal = data.data.fileinfos.total;
                             this.fileTotalSize = data.data.fileTotalStr;
-                            this.user_disk = true;
                             this.login_user = false;
                         } else {
                             ElMessage.error(data.message);
                         }
                     })
-                this.diskDrawer = true;
             },
 
             deleteFile(index, row) {
@@ -323,10 +318,10 @@
             },
             checkLogin() {
                 let userId = Cookies.get('userId');
-                if(userId == null){
+                if (userId == null) {
                     //登录窗口
                     this.login_user = true;
-                }else{
+                } else {
                     //已登录 加载初始信息
                     this.diskInfo();
                 }
@@ -360,22 +355,7 @@
     }
 </script>
 <style>
-    .uploader-example {
-        width: 880px;
-        padding: 15px;
-        margin: 40px auto 0;
-        font-size: 12px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, .4);
-    }
+    .uploader-btn{
 
-    .uploader-example .uploader-btn {
-        margin-right: 4px;
-    }
-
-    .uploader-example .uploader-list {
-        max-height: 440px;
-        overflow: auto;
-        overflow-x: hidden;
-        overflow-y: auto;
     }
 </style>
