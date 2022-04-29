@@ -9,78 +9,118 @@
     <!--        <i style="font-size:24px" class="el-icon-bell">-->
     <!--        </i>-->
     <!--    </el-tooltip>-->
-    <uploader :options="options"
-              :file-status-text="statusText"
-              @file-added="filesAdded"
-              @file-success="onFileSuccess"
-              class="uploader-example">
-        <uploader-unsupport></uploader-unsupport>
-        <el-dropdown>
-            <el-button type="primary">
-                上传
-                <el-icon class="el-icon--right">
-                    <arrow-down/>
-                </el-icon>
-            </el-button>
-            <template #dropdown>
-                <el-dropdown-menu>
-                    <el-dropdown-item>
-                        <uploader-btn >上传文件</uploader-btn>
-                    </el-dropdown-item>
-                    <el-dropdown-item>
-                        <uploader-btn :directory="true">上传文件夹</uploader-btn>
-                    </el-dropdown-item>
-                </el-dropdown-menu>
-            </template>
-        </el-dropdown>
-
-
-        <uploader-list v-show="uploadPanel">
-        </uploader-list>
-    </uploader>
-    <el-tabs v-model="default_fileList" @tab-click="tableClick">
-        <el-table v-if="myFile.length>0"
-                  :data="myFile"
-                  fit="false"
-                  max-height="540px"
-                  size="mini"
-                  style="font-size:9px;margin: 20px;width: 100%">
-            <el-table-column
-                    fixed
-                    prop="name"
-                    label="文件名"
-                    show-overflow-tooltip="true"
-                    width="1300px">
-            </el-table-column>
-            <el-table-column
-                    prop="createDt"
-                    label="上传时间"
-                    width="100px">
-            </el-table-column>
-            <el-table-column
-                    prop="saveDt"
-                    label="保存时间"
-                    width="100">
-            </el-table-column>
-            <el-table-column
-                    prop="fileSizeText"
-                    label="文件大小"
-                    width="150px">
-            </el-table-column>
-            <el-table-column
-                    fixed="right"
-                    label="操作"
-                    key="slot"
-                    width="200px">
-                <template #default='scope'>
-                    <el-button @click="downFile(scope.row)" type="text" size="small">下载</el-button>
-                    <el-button @click="deleteFile(scope.$index,scope.row)" type="text"
-                               style="color: red" size="small">删除
-                    </el-button>
+    <div class="top-menu">
+        <span class="function-menu">
+            <uploader :options="options"
+                      :file-status-text="statusText"
+                      @file-added="filesAdded"
+                      @file-success="onFileSuccess"
+                      class="uploader-example">
+            <uploader-unsupport></uploader-unsupport>
+            <el-dropdown>
+                <el-button type="primary">
+                    上传
+                    <el-icon class="el-icon--right">
+                        <arrow-down/>
+                    </el-icon>
+                </el-button>
+                <template #dropdown>
+                    <el-dropdown-menu>
+                        <el-dropdown-item>
+                            <uploader-btn>上传文件</uploader-btn>
+                        </el-dropdown-item>
+                        <el-dropdown-item>
+                            <uploader-btn :directory="true">上传文件夹</uploader-btn>
+                        </el-dropdown-item>
+                    </el-dropdown-menu>
                 </template>
-            </el-table-column>
-        </el-table>
-    </el-tabs>
+            </el-dropdown>
+
+            <uploader-list v-show="uploadPanel">
+            </uploader-list>
+        </uploader>
+        </span>
+        <span class="function-menu">
+            <button @click="newFolder">
+                <i class="el-icon-folder-add"></i>
+                <span>新建文件夹</span>
+            </button>
+        </span>
+    </div>
+    <el-table v-if="myFile.length>0"
+              :data="myFile"
+              fit="false"
+              max-height="540px"
+              size="mini"
+              style="font-size:9px;margin: 20px;width: 100%">
+        <el-table-column
+                type="selection"
+                width="55">
+        </el-table-column>
+        <el-table-column
+                fixed
+                prop="name"
+                label="文件名"
+                show-overflow-tooltip="true"
+                width="1200px">
+            <template #default="scope">
+                <div style="display: flex; align-items: center">
+                    <a :href="'#/disk?fileFolderId='+scope.row.id">
+                        <i v-if="scope.row.fileType==null">[文件夹]</i>
+                    </a>
+                    <i v-if="scope.row.fileType==0">
+                        [文件夹]
+                        <el-input
+                                v-model="this.name"
+                                class="w-50 m-2"
+                                size="small"
+                                placeholder=""/>
+                        <a class="aLink" @click="addFolder">
+                            <i style="font-size: 17px;color:#21a5dc" class="el-icon-check">
+                            </i>
+                        </a>
+                        <a class="aLink">
+                            <i style="font-size: 17px;color:#21a5dc" class="el-icon-close">
+                            </i>
+                        </a>
+                    </i>
+                    <i v-if="scope.row.fileType==1">[图片]</i>
+                    <i v-if="scope.row.fileType==2">[音乐]</i>
+                    <i v-if="scope.row.fileType==3">[视频]</i>
+                    <i v-if="scope.row.fileType==4">[文档]</i>
+                    <i v-if="scope.row.fileType==5">[其他文件]</i>
+                    <span style="margin-left: 10px">{{ scope.row.name }}</span>
+                </div>
+            </template>
+        </el-table-column>
+        <el-table-column
+                prop="createDt"
+                label="上传时间"
+                width="100px">
+        </el-table-column>
+        <el-table-column
+                prop="saveDt"
+                label="保存时间"
+                width="100">
+        </el-table-column>
+        <el-table-column
+                prop="fileSizeText"
+                label="文件大小"
+                width="150px">
+        </el-table-column>
+        <el-table-column
+                fixed="right"
+                label="操作"
+                key="slot"
+                width="200px">
+            <template #default='scope'>
+                <el-button @click="downFile(scope.row)" type="text" size="small">下载</el-button>
+                <el-button @click="deleteFile(scope.$index,scope.row)" type="text"
+                           style="color: red" size="small">删除
+                </el-button>
+            </template>
+        </el-table-column>
+    </el-table>
     <el-dialog title="登陆" v-model="login_user" width="30%">
         <el-form label-width="70px">
             <el-form-item label="用户名">
@@ -106,6 +146,8 @@
     export default {
         data() {
             return {
+                name: "",
+                checkAddFloder: true,
                 uploadPanel: false,
                 options: {
                     target: '/disk/file/uploadFile',
@@ -139,7 +181,6 @@
                 percentage: "",
                 show: "",
                 uploadUrl: "",
-                default_fileList: "0",
                 form: {
                     userName: "",
                     passWord: ""
@@ -154,15 +195,8 @@
                 },
                 fileList: [],
                 myFile: [],
-                fileTotalSize: 0,
                 upLoadValiValue: -1,
                 fileKey: "",
-                orderType: 3,
-                query: {
-                    pageSize: 10,
-                    pageTotal: 0,
-                    pageIndex: 1,
-                },
             }
         },
         mounted: function () {
@@ -181,7 +215,7 @@
                 let formData = new FormData();
                 formData.append('file', file.file);
                 axios({
-                    url: "/leyuna/disk/requestSaveFile",
+                    url: "/disk/file/requestSaveFile",
                     method: "POST",
                     async: false,
                     processData: false, // 使数据不做处理
@@ -209,28 +243,6 @@
                 file.resume();
             },
 
-            tableClick(tab, event) {
-                var fileType = tab.props.name;
-                this.default_fileList = fileType;
-                axios({
-                    url: "/leyuna/disk/getDiskInfo",
-                    method: "GET",
-                    params: {
-                        fileType: fileType,
-                        type: this.orderType,
-                        index: this.query.pageIndex,
-                        size: this.query.pageSize
-                    }
-                }).then((res) => {
-                    var data = res.data;
-                    if (data.status) {
-                        this.myFile = data.data.fileinfos.records;
-                        this.query.pageTotal = data.data.fileinfos.total;
-                    } else {
-                        ElMessage.error(data.message);
-                    }
-                })
-            },
             getTime(val) {
                 this.val = this.val.format("YYYY-MM-DD");
                 alert(val)
@@ -239,28 +251,48 @@
             publishDateAfter(time) {
                 return time.getTime() <= Date.now();
             },
-
+            addFolder() {
+                if(this.name == "" ){
+                    ElMessage.error("文件(夹)名称不能为空，请输入文件名称")
+                    return false;
+                }
+                axios({
+                    url: "/disk/file/newFolder",
+                    method: "POST",
+                    data: {
+                        userId: Cookies.get('userId'),
+                        filename: this.name,
+                        fileFolderId: this.$route.query.fileFolderId,
+                    }
+                }).then((res) => {
+                    var data = res.data;
+                    if(data.status){
+                        ElMessage.success("创建文件夹成功");
+                        this.checkAddFloder = true;
+                        this.diskInfo();
+                    }else{
+                        ElMessage.error(data.message);
+                        this.name = "";
+                    }
+                })
+            },
             diskInfo() {
-                this.default_fileList = "0",
-                    axios({
-                        url: "/leyuna/disk/getDiskInfo",
-                        method: "GET",
-                        params: {
-                            fileType: this.default_fileList,
-                            userId: Cookies.get('userId'),
-                            type: this.orderType
-                        }
-                    }).then((res) => {
-                        var data = res.data;
-                        if (data.status) {
-                            this.myFile = data.data.fileinfos.records;
-                            this.query.pageTotal = data.data.fileinfos.total;
-                            this.fileTotalSize = data.data.fileTotalStr;
-                            this.login_user = false;
-                        } else {
-                            ElMessage.error(data.message);
-                        }
-                    })
+                axios({
+                    url: "/disk/file/selectFile",
+                    method: "GET",
+                    params: {
+                        userId: Cookies.get('userId'),
+                        fileFolderId: this.$route.query.fileFolderId
+                    }
+                }).then((res) => {
+                    var data = res.data;
+                    if (data.status) {
+                        this.myFile = data.data.fileinfos;
+                        this.login_user = false;
+                    } else {
+                        ElMessage.error(data.message);
+                    }
+                })
             },
 
             deleteFile(index, row) {
@@ -270,7 +302,7 @@
                     type: 'warning'
                 }).then(() => {
                     axios({
-                        url: "/leyuna/disk/deleteFile",
+                        url: "/disk/file/deleteFile",
                         method: "GET",
                         params: {
                             fileId: row.id
@@ -279,7 +311,6 @@
                         var data = res.data;
                         if (data.status) {
                             this.myFile.splice(index, 1);
-                            this.fileTotalSize = data.data;
                             this.$message({
                                 type: 'success',
                                 message: '删除成功!'
@@ -297,7 +328,7 @@
             },
             downFile(row) {
                 axios({
-                    url: "/leyuna/disk/downFile",
+                    url: "/disk/file/downFile",
                     method: "GET",
                     params: {
                         fileId: row.id
@@ -346,16 +377,39 @@
                     }
                 }))
             },
-
-            handlePageChange(val) {
-                this.query.pageIndex = val;
-                this.diskInfo();
+            newFolder() {
+                if (this.checkAddFloder) {
+                    this.myFile.unshift({"fileType": 0});
+                }
+                this.checkAddFloder = false;
             },
         }
     }
 </script>
 <style>
-    .uploader-btn{
+    .function-menu {
+        float: left;
+    }
 
+    .top-menu {
+
+    }
+
+    .aLink {
+        display: inline-flex;
+        border: none;
+        width: 3rem;
+        height: 3rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        line-height: 1;
+        transition-property: all;
+        transition-duration: .3s;
+        transition-delay: 0s;
+    }
+
+    .aLink:hover {
+        background-color: #E5F1FD;
     }
 </style>
