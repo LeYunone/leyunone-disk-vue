@@ -47,12 +47,20 @@
             </button>
         </span>
     </div>
-    <el-table v-if="myFile.length>0"
-              :data="myFile"
-              fit="false"
-              max-height="540px"
-              size="mini"
-              style="font-size:9px;margin: 20px;width: 100%">
+    <div style="clear:both"></div>
+    <el-breadcrumb style="margin-top:30px " separator-class="el-icon-arrow-right">
+        <el-breadcrumb-item @click="goBack">返回上一级</el-breadcrumb-item>
+        <el-breadcrumb-item>活动管理</el-breadcrumb-item>
+        <el-breadcrumb-item>活动管理</el-breadcrumb-item>
+        <el-breadcrumb-item>活动列表</el-breadcrumb-item>
+        <el-breadcrumb-item>活动详情</el-breadcrumb-item>
+    </el-breadcrumb>
+    <el-table
+            :data="myFile"
+            fit="false"
+            max-height="540px"
+            size="mini"
+            style="font-size:9px;margin: 20px;width: 100%">
         <el-table-column
                 type="selection"
                 width="55">
@@ -65,7 +73,7 @@
                 width="1200px">
             <template #default="scope">
                 <div style="display: flex; align-items: center">
-                    <a :href="'#/disk?fileFolderId='+scope.row.id">
+                    <a @click="openFolder(scope.row.name,scope.row.id)">
                         <i v-if="scope.row.fileType==null">[文件夹]</i>
                     </a>
                     <i v-if="scope.row.fileType==0">
@@ -141,10 +149,11 @@
 <script>
     import axios from "axios";
     import {ElMessage} from "element-plus";
-    import Cookies from 'js-cookie'
+    import Cookies from 'js-cookie';
 
     export default {
         data() {
+            let self = this
             return {
                 name: "",
                 checkAddFloder: true,
@@ -155,10 +164,19 @@
                     fileParameterName: 'file', //上传文件时文件的参数名，默认file
                     singleFile: true, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
                     query: function (file, res, status) {
-                        console.log(file)
-                        return {
-                            "userId": Cookies.get('userId'),
-                            "fileType": file.getType(),
+                        if (self.folderId != null) {
+                            return {
+                                "userId": Cookies.get('userId'),
+                                "fileType": file.getType(),
+                                "identifier": file.uniqueIdentifier,
+                                "fileFolderId": self.folderId
+                            }
+                        } else {
+                            return {
+                                "userId": Cookies.get('userId'),
+                                "identifier": file.uniqueIdentifier,
+                                "fileType": file.getType(),
+                            }
                         }
                     },
                     maxChunkRetries: 3,  //最大自动失败重试上传次数
@@ -197,16 +215,39 @@
                 myFile: [],
                 upLoadValiValue: -1,
                 fileKey: "",
+                folderId: "",
             }
         },
         mounted: function () {
             this.checkLogin();
         },
         methods: {
+            loadParams() {
+                var folderId = this.$route.query.fileFolderId;
+                if (folderId != null) {
+                    var temp = this.$route.query.fileFolderId.split('%');
+                    folderId = temp[temp.length - 1];
+                } else {
+                    folderId = null;
+                }
+                this.folderId = folderId;
+            },
+            goBack() {
+                this.$router.go(-1)
+            },
+            openFolder(name, id) {
+                let paths = this.$route.query.fileFolderId;
+                if (paths == null) {
+                    paths = id;
+                } else {
+                    paths = paths + '%' + id;
+                }
+                this.$router.push({path: '/disk', query: {fileFolderId: paths}});
+            },
             //云盘相关
             onFileSuccess: function (rootFile, file, response, chunk) {
                 ElMessage.success("上传成功");
-                console.log(response);
+                this.diskInfo();
             },
             //上传文件前
             filesAdded(file, event) {
@@ -214,6 +255,10 @@
                 //上传前校验该文件是否上传
                 let formData = new FormData();
                 formData.append('file', file.file);
+                formData.append("userId", Cookies.get('userId'))
+                if (this.folderId != null) {
+                    formData.append("fileFolderId", this.folderId)
+                }
                 axios({
                     url: "/disk/file/requestSaveFile",
                     method: "POST",
@@ -227,20 +272,20 @@
                     if (data.status) {
                         var responseType = data.data.responseType;
                         if (responseType === 1) {
-                            this.upLoadValiValue = 1;
                             file.uniqueIdentifier = data.data.identifier;
-                            console.log(data.data.identifier);
+                            //继续上传
+                            console.log(file)
+                            file.resume();
                         } else {
-                            this.upLoadValiValue = 0;
+                            file.cancel();
                         }
-                        //继续上传
                     } else {
                         //上传失败
                         ElMessage.error("UpLoadFile Error");
+                        file.cancel();
                         return false;
                     }
                 })
-                file.resume();
             },
 
             getTime(val) {
@@ -252,7 +297,7 @@
                 return time.getTime() <= Date.now();
             },
             addFolder() {
-                if(this.name == "" ){
+                if (this.name == "") {
                     ElMessage.error("文件(夹)名称不能为空，请输入文件名称")
                     return false;
                 }
@@ -262,27 +307,29 @@
                     data: {
                         userId: Cookies.get('userId'),
                         filename: this.name,
-                        fileFolderId: this.$route.query.fileFolderId,
+                        fileFolderId: this.folderId,
                     }
                 }).then((res) => {
                     var data = res.data;
-                    if(data.status){
+                    if (data.status) {
                         ElMessage.success("创建文件夹成功");
                         this.checkAddFloder = true;
                         this.diskInfo();
-                    }else{
+                    } else {
                         ElMessage.error(data.message);
                         this.name = "";
                     }
                 })
             },
             diskInfo() {
+                this.loadParams();
+
                 axios({
                     url: "/disk/file/selectFile",
                     method: "GET",
                     params: {
                         userId: Cookies.get('userId'),
-                        fileFolderId: this.$route.query.fileFolderId
+                        fileFolderId: this.folderId
                     }
                 }).then((res) => {
                     var data = res.data;
