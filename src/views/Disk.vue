@@ -168,13 +168,11 @@
                             return {
                                 "userId": Cookies.get('userId'),
                                 "fileType": file.getType(),
-                                "identifier": file.uniqueIdentifier,
                                 "fileFolderId": self.folderId
                             }
                         } else {
                             return {
                                 "userId": Cookies.get('userId'),
-                                "identifier": file.uniqueIdentifier,
                                 "fileType": file.getType(),
                             }
                         }
@@ -246,8 +244,25 @@
             },
             //云盘相关
             onFileSuccess: function (rootFile, file, response, chunk) {
-                ElMessage.success("上传成功");
-                this.diskInfo();
+                let res = JSON.parse(response);
+                if(res.status){
+                    //上传成功 帮助服务端删除临时目录
+                    axios({
+                        url:"/disk/file/deleteTempFile",
+                        method:"POST",
+                        params:{tempPath:res.data}
+                    }).then((res) =>{
+                        var data = res.data;
+                        if(data.status){
+                            ElMessage.success("上传成功");
+                            this.diskInfo();
+                        }else{
+                            ElMessage.success("上传成功，但服务端有文件残留");
+                        }
+                    })
+                }else{
+                    ElMessage.error(res.message);
+                }
             },
             //上传文件前
             filesAdded(file, event) {
@@ -259,6 +274,7 @@
                 if (this.folderId != null) {
                     formData.append("fileFolderId", this.folderId)
                 }
+                file.pause();
                 axios({
                     url: "/disk/file/requestSaveFile",
                     method: "POST",
@@ -274,9 +290,11 @@
                         if (responseType === 1) {
                             file.uniqueIdentifier = data.data.identifier;
                             //继续上传
-                            console.log(file)
                             file.resume();
-                        } else {
+                        }
+                        if(responseType === 0){
+                            ElMessage.success("上传成功");
+                            this.diskInfo();
                             file.cancel();
                         }
                     } else {
@@ -350,18 +368,19 @@
                 }).then(() => {
                     axios({
                         url: "/disk/file/deleteFile",
-                        method: "GET",
-                        params: {
-                            fileId: row.id
+                        method: "POST",
+                        data: {
+                            id: row.id,
+                            userId: Cookies.get('userId')
                         }
                     }).then(res => {
                         var data = res.data;
                         if (data.status) {
-                            this.myFile.splice(index, 1);
                             this.$message({
                                 type: 'success',
                                 message: '删除成功!'
                             });
+                            this.diskInfo();
                         } else {
                             ElMessage.error(data.message);
                         }
