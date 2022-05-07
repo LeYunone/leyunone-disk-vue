@@ -394,10 +394,11 @@
             },
             downFile(row) {
                 axios({
-                    url: "/disk/file/downFile",
-                    method: "GET",
-                    params: {
-                        fileId: row.id
+                    url: "/disk/file/downloadFile",
+                    method: "POST",
+                    data: {
+                        fileId: row.id,
+                        userId:Cookies.get('userId')
                     },
                     responseType: 'blob'
                 }).then((res) => {
