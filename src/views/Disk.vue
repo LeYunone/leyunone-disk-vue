@@ -56,7 +56,7 @@
         <el-breadcrumb-item>活动详情</el-breadcrumb-item>
     </el-breadcrumb>
     <el-table
-            :data="myFile"
+            :data="fileList"
             fit="false"
             max-height="540px"
             size="mini"
@@ -76,7 +76,7 @@
                     <a @click="openFolder(scope.row.name,scope.row.id)">
                         <i v-if="scope.row.fileType==null">[文件夹]</i>
                     </a>
-                    <i v-if="scope.row.fileType==0">
+                    <i v-if="scope.row.isFolder">
                         [文件夹]
                         <el-input
                                 v-model="this.name"
@@ -92,27 +92,24 @@
                             </i>
                         </a>
                     </i>
-                    <i v-if="scope.row.fileType==1">[图片]</i>
-                    <i v-if="scope.row.fileType==2">[音乐]</i>
-                    <i v-if="scope.row.fileType==3">[视频]</i>
-                    <i v-if="scope.row.fileType==4">[文档]</i>
-                    <i v-if="scope.row.fileType==5">[其他文件]</i>
-                    <span style="margin-left: 10px">{{ scope.row.name }}</span>
+                    <i v-else>
+                        <i v-if="scope.row.fileType===1">[图片]</i>
+                        <i v-if="scope.row.fileType===2">[音乐]</i>
+                        <i v-if="scope.row.fileType===3">[视频]</i>
+                        <i v-if="scope.row.fileType===4">[文档]</i>
+                        <i v-if="scope.row.fileType===5">[其他文件]</i>
+                        <span style="margin-left: 10px">{{ scope.row.name }}</span>
+                    </i>
                 </div>
             </template>
         </el-table-column>
         <el-table-column
-                prop="createDt"
-                label="上传时间"
-                width="100px">
-        </el-table-column>
-        <el-table-column
-                prop="saveDt"
-                label="保存时间"
+                prop="updateDt"
+                label="更新时间"
                 width="100">
         </el-table-column>
         <el-table-column
-                prop="fileSizeText"
+                prop="fileSize"
                 label="文件大小"
                 width="150px">
         </el-table-column>
@@ -129,27 +126,11 @@
             </template>
         </el-table-column>
     </el-table>
-    <el-dialog title="登陆" v-model="login_user" width="30%">
-        <el-form label-width="70px">
-            <el-form-item label="用户名">
-                <el-input v-model="form.userName"></el-input>
-            </el-form-item>
-            <el-form-item label="密码">
-                <el-input type="password" v-model="form.passWord"></el-input>
-            </el-form-item>
-        </el-form>
-        <template #footer>
-                        <span class="dialog-footer">
-                            <el-button @click="login_user = false">取 消</el-button>
-                            <el-button type="primary" @click="login">确 定</el-button>
-                        </span>
-        </template>
-    </el-dialog>
 </template>
 <script>
     import axios from "axios";
     import {ElMessage} from "element-plus";
-    import Cookies from 'js-cookie';
+    import SparkMD5 from 'spark-md5'
 
     export default {
         data() {
@@ -159,20 +140,19 @@
                 checkAddFloder: true,
                 uploadPanel: false,
                 options: {
-                    target: '/disk/file/uploadFile',
+                    target: '/disk/api/file/upload',
+                    method: "POST",
                     chunkSize: 1024 * 1024 * 5,  //3MB
                     fileParameterName: 'file', //上传文件时文件的参数名，默认file
                     singleFile: true, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
                     query: function (file, res, status) {
-                        if (self.folderId != null) {
+                        if (self.fileFolderId != null) {
                             return {
-                                "userId": Cookies.get('userId'),
                                 "fileType": file.getType(),
-                                "fileFolderId": self.folderId
+                                "fileFolderId": self.fileFolderId
                             }
                         } else {
                             return {
-                                "userId": Cookies.get('userId'),
                                 "fileType": file.getType(),
                             }
                         }
@@ -194,41 +174,28 @@
                     paused: "等待中...",
                     waiting: "等待中..."
                 },
-                percentage: "",
-                show: "",
-                uploadUrl: "",
-                form: {
-                    userName: "",
-                    passWord: ""
-                },
-                upLoadParam: {
-                    saveTime: "",
-                },
-                login_user: false,
                 pageData: {
                     index: 1,
                     size: 10
                 },
                 fileList: [],
-                myFile: [],
                 upLoadValiValue: -1,
-                fileKey: "",
-                folderId: "",
+                fileFolderId: "",
             }
         },
         mounted: function () {
-            this.checkLogin();
+            this.diskInfo();
         },
         methods: {
             loadParams() {
-                var folderId = this.$route.query.fileFolderId;
-                if (folderId != null) {
+                var fileFolderId = this.$route.query.fileFolderId;
+                if (fileFolderId != null) {
                     var temp = this.$route.query.fileFolderId.split('%');
-                    folderId = temp[temp.length - 1];
+                    fileFolderId = temp[temp.length - 1];
                 } else {
-                    folderId = null;
+                    fileFolderId = null;
                 }
-                this.folderId = folderId;
+                this.fileFolderId = fileFolderId;
             },
             goBack() {
                 this.$router.go(-1)
@@ -245,54 +212,38 @@
             //云盘相关
             onFileSuccess: function (rootFile, file, response, chunk) {
                 let res = JSON.parse(response);
-                if(res.status){
+                if (res.status) {
                     //上传成功 帮助服务端删除临时目录
-                    axios({
-                        url:"/disk/file/deleteTempFile",
-                        method:"POST",
-                        params:{tempPath:res.data}
-                    }).then((res) =>{
-                        var data = res.data;
-                        if(data.status){
-                            ElMessage.success("上传成功");
-                            this.diskInfo();
-                        }else{
-                            ElMessage.success("上传成功，但服务端有文件残留");
-                        }
-                    })
-                }else{
+                } else {
                     ElMessage.error(res.message);
                 }
             },
             //上传文件前
-            filesAdded(file, event) {
+            async filesAdded(file, event) {
+                console.log(file)
                 this.uploadPanel = true;
                 //上传前校验该文件是否上传
-                let formData = new FormData();
-                formData.append('file', file.file);
-                formData.append("userId", Cookies.get('userId'))
-                if (this.folderId != null) {
-                    formData.append("fileFolderId", this.folderId)
-                }
+                const md5 = await this.calculateMD5(file.file);
                 file.pause();
                 axios({
-                    url: "/disk/file/requestSaveFile",
+                    url: "/disk/api/pre/requestUploadFile",
                     method: "POST",
                     async: false,
                     processData: false, // 使数据不做处理
                     contentType: false,
                     dataType: 'json',
-                    data: formData
+                    data: md5
                 }).then((res) => {
                     var data = res.data;
-                    if (data.status) {
-                        var responseType = data.data.responseType;
+                    if (data.success) {
+                        var responseType = data.result.responseType;
                         if (responseType === 1) {
-                            file.uniqueIdentifier = data.data.identifier;
+                            file.uniqueIdentifier = data.result.identifier;
                             //继续上传
                             file.resume();
+                            file.uploadId = data.result.uploadId
                         }
-                        if(responseType === 0){
+                        if (responseType === 0) {
                             ElMessage.success("上传成功");
                             this.diskInfo();
                             file.cancel();
@@ -305,31 +256,40 @@
                     }
                 })
             },
-
-            getTime(val) {
-                this.val = this.val.format("YYYY-MM-DD");
-                alert(val)
-                this.upLoadParam.saveTime = val;
+            async calculateMD5(file) {
+                return new Promise((resolve, reject) => {
+                    const fileReader = new FileReader();
+                    fileReader.onload = (e) => {
+                        const arrayBuffer = e.target.result;
+                        const spark = new SparkMD5.ArrayBuffer();
+                        spark.append(arrayBuffer);
+                        const md5 = spark.end();
+                        resolve(md5);
+                    };
+                    fileReader.onerror = (error) => {
+                        reject(error);
+                    };
+                    fileReader.readAsArrayBuffer(file);
+                });
             },
             publishDateAfter(time) {
                 return time.getTime() <= Date.now();
             },
             addFolder() {
-                if (this.name == "") {
+                if (this.name === "") {
                     ElMessage.error("文件(夹)名称不能为空，请输入文件名称")
                     return false;
                 }
                 axios({
-                    url: "/disk/file/newFolder",
+                    url: "/disk/api/file/newFolder",
                     method: "POST",
                     data: {
-                        userId: Cookies.get('userId'),
                         filename: this.name,
-                        fileFolderId: this.folderId,
+                        fileFolderId: this.fileFolderId,
                     }
                 }).then((res) => {
                     var data = res.data;
-                    if (data.status) {
+                    if (data.success) {
                         ElMessage.success("创建文件夹成功");
                         this.checkAddFloder = true;
                         this.diskInfo();
@@ -343,17 +303,19 @@
                 this.loadParams();
 
                 axios({
-                    url: "/disk/file/selectFile",
+                    url: "/disk/api/file/getFiles",
                     method: "GET",
                     params: {
-                        userId: Cookies.get('userId'),
-                        fileFolderId: this.folderId
+                        fileFolderId: this.fileFolderId,
+                        index: 1,
+                        size: 50,
+                        nameCondition: "",
+                        fileType: ""
                     }
                 }).then((res) => {
                     var data = res.data;
-                    if (data.status) {
-                        this.myFile = data.data.fileinfos;
-                        this.login_user = false;
+                    if (data.success) {
+                        this.fileList = data.result.fileinfos;
                     } else {
                         ElMessage.error(data.message);
                     }
@@ -367,15 +329,14 @@
                     type: 'warning'
                 }).then(() => {
                     axios({
-                        url: "/disk/file/deleteFile",
+                        url: "/disk/api/file/delete",
                         method: "POST",
                         data: {
-                            id: row.id,
-                            userId: Cookies.get('userId')
+                            fileId: row.fileId,
                         }
                     }).then(res => {
                         var data = res.data;
-                        if (data.status) {
+                        if (data.success) {
                             this.$message({
                                 type: 'success',
                                 message: '删除成功!'
@@ -392,13 +353,12 @@
                     });
                 });
             },
-            downFile(row) {
+            downFileStream(row) {
                 axios({
-                    url: "/disk/file/downloadFile",
+                    url: "/disk/api/file/downloadFile",
                     method: "POST",
                     data: {
                         fileId: row.id,
-                        userId:Cookies.get('userId')
                     },
                     responseType: 'blob'
                 }).then((res) => {
@@ -414,39 +374,34 @@
                     window.URL.revokeObjectURL(href);
                 })
             },
-            checkLogin() {
-                let userId = Cookies.get('userId');
-                if (userId == null) {
-                    //登录窗口
-                    this.login_user = true;
-                } else {
-                    //已登录 加载初始信息
-                    this.diskInfo();
-                }
+            downFile(row){
+              this.downFileHttp(row)  
             },
-            login() {
+            downFileHttp(row) {
                 axios({
-                    url: "/leyuna/user/login",
+                    url: "/disk/api/file/download",
                     method: "POST",
                     data: {
-                        "userName": this.form.userName,
-                        "passWord": this.form.passWord
-                    }
-                }).then((res => {
+                        fileId: row.fileId,
+                    },
+                }).then((res) => {
                     var data = res.data;
-                    if (data.status) {
-                        this.diskInfo();
-                        Cookies.set('userId', data.data.loginId);
+                    if (data.success) {
+                        const link = document.createElement('a');
+                        link.href = data.result;
+                        link.setAttribute('download', 'filename'); // 设置下载文件的名称
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
                     } else {
+                        //上传失败
                         ElMessage.error(data.message);
-                        this.form.userName = "";
-                        this.form.passWord = "";
                     }
-                }))
+                })
             },
             newFolder() {
                 if (this.checkAddFloder) {
-                    this.myFile.unshift({"fileType": 0});
+                    this.fileList.unshift({"fileType": 0});
                 }
                 this.checkAddFloder = false;
             },

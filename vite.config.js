@@ -24,12 +24,7 @@ export default defineConfig({
         strictPort: false,
         https: false,
         proxy: {
-            '/leyuna': {
-                target: 'http://127.0.0.1:9000',
-                changeOrigin: true,
-                secure: false
-            },
-            '/disk':{
+            '/disk/api':{
                 target: 'http://127.0.0.1:9001',
                 changeOrigin: true,
                 secure: false
