@@ -1,16 +1,8 @@
 <template>
-    【云盘】
-    <!--    <el-date-picker :disabled-date="publishDateAfter"-->
-    <!--                    type="date" placeholder="保存时间" v-model="upLoadParam.saveTime"-->
-    <!--                    value-format="YYYY-MM-DD"-->
-    <!--                    style="margin-left:10px; width: 24%;"></el-date-picker>-->
-    <!--    <el-tooltip class="item" effect="dark" content="选择保存时间：-->
-    <!--                            到某年某日自动过期;未选择默认：永久保存" placement="bottom">-->
-    <!--        <i style="font-size:24px" class="el-icon-bell">-->
-    <!--        </i>-->
-    <!--    </el-tooltip>-->
     <div class="main-top">
-        <span class="function-menu">
+        <h3>一个云盘</h3>
+        <div class="main-top-operation">
+            <span class="function-menu">
             <uploader :options="options"
                       :file-status-text="statusText"
                       :autoStart="false"
@@ -41,22 +33,26 @@
             </uploader-list>
         </uploader>
         </span>
-        <span class="function-menu">
+            <span class="function-menu">
             <el-button class="button-common" @click="folderDrawer = true">
                 <i class="el-icon-folder-add"></i>
                 <span>新建文件夹</span>
             </el-button>
-        </span>
+            </span>
+        </div>
     </div>
+
     <div style="clear:both"></div>
     <div class="table-main">
-        <el-breadcrumb style="margin-top:30px " separator-class="el-icon-arrow-right">
-            <el-breadcrumb-item @click="goBack">返回上一级</el-breadcrumb-item>
-            <el-breadcrumb-item>活动管理</el-breadcrumb-item>
-            <el-breadcrumb-item>活动管理</el-breadcrumb-item>
-            <el-breadcrumb-item>活动列表</el-breadcrumb-item>
-            <el-breadcrumb-item>活动详情</el-breadcrumb-item>
+        <el-breadcrumb style="margin-top:30px " separator="/">
+            <el-breadcrumb-item>
+                <a @click="goRouter(-1)">首页</a>
+            </el-breadcrumb-item>
+            <el-breadcrumb-item v-for="item in navFolders">
+                <a @click="goRouter(item.folderId)">{{item.folderName}}</a>
+            </el-breadcrumb-item>
         </el-breadcrumb>
+
         <el-table
                 :data="fileList"
                 fit="false"
@@ -70,12 +66,36 @@
             <el-table-column
                     width="80">
                 <template #default="scope">
-                    <a v-if="scope.row.folder" class="el-icon-folder" @click="openFolder(scope.row.folderId)"></a>
-                    <i v-if="scope.row.fileType===1" class="el-icon-picture"></i>
-                    <i v-if="scope.row.fileType===2" class="el-icon-headset"></i>
-                    <i v-if="scope.row.fileType===3" class="el-icon-video-camera-solid"></i>
-                    <i v-if="scope.row.fileType===4" class="el-icon-document-copy"></i>
-                    <i v-if="scope.row.fileType===5" class="el-icon-tickets"></i>
+                    <a v-if="scope.row.folder" @click="goRouter(scope.row.folderId)">
+                        <el-icon>
+                            <Folder/>
+                        </el-icon>
+                    </a>
+                    <i v-if="scope.row.fileType===1">
+                        <el-icon>
+                            <Picture/>
+                        </el-icon>
+                    </i>
+                    <i v-if="scope.row.fileType===2">
+                        <el-icon>
+                            <Headset/>
+                        </el-icon>
+                    </i>
+                    <i v-if="scope.row.fileType===3">
+                        <el-icon>
+                            <VideoCamera/>
+                        </el-icon>
+                    </i>
+                    <i v-if="scope.row.fileType===4">
+                        <el-icon>
+                            <DocumentCopy/>
+                        </el-icon>
+                    </i>
+                    <i v-if="scope.row.fileType===5">
+                        <el-icon>
+                            <Tickets/>
+                        </el-icon>
+                    </i>
                 </template>
             </el-table-column>
             <el-table-column
@@ -85,7 +105,7 @@
                     width="500">
                 <template #default="scope">
                     <div style="display: flex; align-items: center">
-                        <el-button v-if="scope.row.folder" @click="openFolder(scope.row.folderId)" type="text"
+                        <el-button v-if="scope.row.folder" @click="goRouter(scope.row.folderId)" type="text"
                                    size="small">
                             {{scope.row.folderName}}
                         </el-button>
@@ -98,28 +118,27 @@
             <el-table-column
                     prop="updateDt"
                     label="更新时间"
-                    width="150">
+                    width="165">
             </el-table-column>
             <el-table-column
                     prop="fileSize"
                     label="文件大小"
-                    width="150">
+                    width="135">
             </el-table-column>
             <el-table-column
                     fixed="right"
                     label="操作"
                     key="slot"
-                    width="120">
+                    width="200">
                 <template #default='scope'>
-                    <el-button v-if="scope.row.fileType===1" v-clipboard:copy="scope.row.filePath"
-                               v-clipboard:success="copySuccess(scope.row)" type="text" size="small">复制url
+                    <el-button v-if="scope.row.fileType===1" type="primary" text size="small">复制url
                     </el-button>
-                    <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row)" type="text" size="small">详情
+                    <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row)" type="primary" text
+                               size="small">详情
                     </el-button>
-                    <el-button v-if="!scope.row.folder" @click="downFile(scope.row)" type="text" size="small">下载
+                    <el-button v-if="!scope.row.folder" @click="downFile(scope.row)" type="primary" text size="small">下载
                     </el-button>
-                    <el-button @click="deleteFile(scope.row)" type="text"
-                               style="color: red" size="small">删除
+                    <el-button @click="deleteFile(scope.row)" type="danger" text style="color: red" size="small">删除
                     </el-button>
                 </template>
             </el-table-column>
@@ -161,52 +180,56 @@
     </el-dialog>
 
     <el-dialog
+            width="700px"
             title="发布图片"
+            drag
             v-model="uploadImgDrawer"
             :before-close="uploadImgDrawerClose">
         <div class="block">
-            <span class="demonstration">文件夹：</span>
-            <el-cascader
-                    placeholder="搜索"
-                    :options="folderTree"
-                    @change="imgSelectParentFolder"
-                    :props="{ checkStrictly: true }"
-                    filterable></el-cascader>
+            <span class="input-line">
+                <span class="demonstration">文件夹：</span>
+                <el-cascader
+                        placeholder="搜索"
+                        :options="folderTree"
+                        @change="imgSelectParentFolder"
+                        :props="{ checkStrictly: true }"
+                        filterable></el-cascader>
+            </span>
+            <span class="input-line">
+                <span class="demonstration">创建日期前缀 年-月-日：</span>
+                <el-switch
+                        v-model="easyUploadForm.hasDate"
+                        active-color="#13ce66"
+                        inactive-color="#ff4949">
+                </el-switch>
+            </span>
         </div>
-        <div class="block">
-            <span class="demonstration">日期前缀 yyyy-MM-dd：</span>
-            <el-switch
-                    v-model="easyUploadForm.hasDate"
-                    active-color="#13ce66"
-                    inactive-color="#ff4949">
-            </el-switch>
+        <div style="padding: 25px">
+            <el-upload action="/disk/api/file/upload"
+                       :data="easyUploadForm"
+                       :drag="true"
+                       :on-success="imgUploadSuccess"
+                       list-type="picture-card"
+                       :auto-upload="true">
+                <el-icon>
+                    <Plus/>
+                </el-icon>
+                <template #file="{ file }">
+                    <div><img class="el-upload-list__item-thumbnail" :src="file.url" alt=""/>
+                        <span class="el-upload-list__item-actions">
+                      <span class="el-upload-list__item-preview"
+                            @click="showImageHandler(file.url)">
+                        <el-icon><zoom-in/></el-icon>
+                      </span>
+                    </span>
+                    </div>
+                </template>
+            </el-upload>
+
+            <el-dialog v-model="imageShow">
+                <img w-full :src="imageShowUrl" alt="Preview Image"/>
+            </el-dialog>
         </div>
-
-        <el-upload action="/disk/api/file/upload"
-                   :data="easyUploadForm"
-                   :drag="true"
-                   :on-success="imgUploadSuccess"
-                   list-type="picture-card"
-                   :auto-upload="true">
-            <el-icon>
-                <Plus/>
-            </el-icon>
-
-            <template #file="{ file }">
-                <div><img class="el-upload-list__item-thumbnail" :src="file.url" alt=""/>
-                    <span class="el-upload-list__item-actions">
-          <span class="el-upload-list__item-preview"
-                @click="handlePictureCardPreview(file)">
-            <el-icon><zoom-in/></el-icon>
-          </span>
-        </span>
-                </div>
-            </template>
-        </el-upload>
-
-        <el-dialog v-model="imageShow">
-            <img w-full :src="imageShowUrl" alt="Preview Image"/>
-        </el-dialog>
 
         <div slot="tip">图片路径： {{uploadImgUrl}}</div>
     </el-dialog>
@@ -217,6 +240,7 @@
     import axios from "axios";
     import {ElMessage} from "element-plus";
     import SparkMD5 from 'spark-md5'
+    import VueClipboard from 'vue-clipboard3';
 
     export default {
         data() {
@@ -278,17 +302,30 @@
                 easyUploadForm: {
                     hasDate: true,
                     easyUpload: true,
-                    parentId: ""
+                    parentId: "",
+                    fileType: 1
                 },
                 uploadImgDrawer: false,
                 imageShow: false,
                 imageShowUrl: "",
-                textToCopy: ""
+                textToCopy: "",
+                navFolders: []
             }
         },
         mounted: function () {
             this.diskInfo();
             this.getFolderTree();
+            axios({
+                url: "/disk/api/system/currentFolder",
+                params: {
+                    "folderId": this.fileFolderId,
+                }
+            }).then((res) => {
+                var data = res.data;
+                if (data.success) {
+                    this.navFolders = data.result;
+                }
+            })
         },
         methods: {
             imgSelectParentFolder(value) {
@@ -296,10 +333,24 @@
                 console.log(this.easyUploadForm.parentId)
             },
             imgUploadSuccess(response, file, fileList) {
+                if (response.success) {
+                    ElMessage.success("上传完成");
+                    navigator.clipboard.writeText(response.result)
+                        .then(() => {
+                            ElMessage.success(`路径已拷贝 Ctrl + c`);
+                        })
+                        .catch(err => {
+                            ElMessage.error(`复制失败: ${error} ！`);
+                        });
+                    this.uploadImgUrl = response.result;
+                    this.diskInfo();
+                } else {
+                    ElMessage.error(response.message);
+                }
                 console.log(response)
             },
-            handlePictureCardPreview(file) {
-                this.imageShowUrl = file.url;
+            showImageHandler(url) {
+                this.imageShowUrl = url;
                 this.imageShow = true;
             },
             getFolderTree() {
@@ -326,17 +377,24 @@
                 }
                 this.fileFolderId = fileFolderId;
             },
-            goBack() {
-                this.$router.go(-1)
-            },
-            openFolder(id) {
+            goRouter(id) {
                 let paths = this.$route.query.fileFolderId;
-                if (paths == null) {
-                    paths = id;
+                if (id == -1) {
+                    if (paths == null) {
+                        paths = id;
+                    } else {
+                        paths = paths + '%' + id;
+                    }
+                    this.$router.push({path: '/disk'});
                 } else {
-                    paths = paths + '%' + id;
+                    if (paths == null) {
+                        paths = id;
+                    } else {
+                        paths = paths + '%' + id;
+                    }
+                    this.$router.push({path: '/disk', query: {fileFolderId: paths}});
                 }
-                this.$router.push({path: '/disk', query: {fileFolderId: paths}});
+
             },
             //云盘相关
             onFileSuccess: function (rootFile, file, response, chunk) {
@@ -360,7 +418,7 @@
                         method: "POST",
                         data: {
                             "uniqueIdentifier": file.uniqueIdentifier,
-                            "folderId": this.$route.query.fileFolderId,
+                            "folderId": this.fileFolderId,
                             "fileName": file.name
                         }
                     }).then((res) => {
@@ -639,8 +697,18 @@
     }
 
     .main-top {
+        text-align: center;
+        margin: 0 auto;
     }
 
+    .main-top-operation {
+        width: 60%;
+        height: 100%;
+        margin: 0 auto;
+    }
+    .input-line{
+        margin-left: 10px;
+    }
     .aLink:hover {
         background-color: #E5F1FD;
     }

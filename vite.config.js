@@ -33,7 +33,6 @@ export default defineConfig({
         }
     },
     optimizeDeps: {
-        include: ['schart.js']
     },
     //生产模式打包配置
     build: {
