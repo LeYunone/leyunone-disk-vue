@@ -9,35 +9,33 @@
                       @file-added="filesAdded"
                       @file-success="onFileSuccess"
                       class="uploader-example">
-            <uploader-unsupport></uploader-unsupport>
-            <el-dropdown>
-                <el-button class="button-common" type="primary">
-                    上传
-                </el-button>
-                <template #dropdown>
-                    <el-dropdown-menu>
-                        <el-dropdown-item>
-                            <uploader-btn>上传文件</uploader-btn>
-                        </el-dropdown-item>
-                        <el-dropdown-item>
-                            <uploader-btn :directory="true">上传文件夹</uploader-btn>
-                        </el-dropdown-item>
-                        <el-dropdown-item>
-                            <button @click="uploadImgDrawer = true">发布图片</button>
-                        </el-dropdown-item>
-                    </el-dropdown-menu>
-                </template>
-            </el-dropdown>
-
-            <uploader-list v-show="uploadPanel">
-            </uploader-list>
-        </uploader>
-        </span>
+                <uploader-unsupport></uploader-unsupport>
+                <el-dropdown>
+                    <el-button class="button-common" type="primary">
+                        上传
+                    </el-button>
+                    <template #dropdown>
+                        <el-dropdown-menu>
+                            <el-dropdown-item>
+                                <uploader-btn>上传文件</uploader-btn>
+                            </el-dropdown-item>
+                            <el-dropdown-item>
+                                <uploader-btn :directory="true">上传文件夹</uploader-btn>
+                            </el-dropdown-item>
+                            <el-dropdown-item>
+                                <button @click="uploadImgDrawer = true">发布图片</button>
+                            </el-dropdown-item>
+                        </el-dropdown-menu>
+                    </template>
+                </el-dropdown>
+                <uploader-list v-show="uploadPanel"/>
+             </uploader>
+            </span>
             <span class="function-menu">
-            <el-button class="button-common" @click="folderDrawer = true">
-                <i class="el-icon-folder-add"></i>
-                <span>新建文件夹</span>
-            </el-button>
+                <el-button class="button-common" @click="folderDrawer = true">
+                    <i class="el-icon-folder-add"></i>
+                    <span>新建文件夹</span>
+                </el-button>
             </span>
         </div>
     </div>
@@ -54,9 +52,12 @@
         </el-breadcrumb>
 
         <el-table
+                @selection-change="selectionLineChangeHandle"
+                v-loading="loadTable"
                 :data="fileList"
                 fit="false"
                 max-height="540px"
+                ref="qweqwe"
                 size="medium"
                 style="margin: 20px;width: 100%">
             <el-table-column
@@ -71,6 +72,11 @@
                             <Folder/>
                         </el-icon>
                     </a>
+                    <i v-if="scope.row.fileType===0">
+                        <el-icon>
+                            <List/>
+                        </el-icon>
+                    </i>
                     <i v-if="scope.row.fileType===1">
                         <el-icon>
                             <Picture/>
@@ -102,7 +108,7 @@
                     prop="name"
                     label="文件名"
                     show-overflow-tooltip="true"
-                    width="500">
+                    width="400">
                 <template #default="scope">
                     <div style="display: flex; align-items: center">
                         <el-button v-if="scope.row.folder" @click="goRouter(scope.row.folderId)" type="text"
@@ -129,9 +135,9 @@
                     fixed="right"
                     label="操作"
                     key="slot"
-                    width="200">
+                    width="300">
                 <template #default='scope'>
-                    <el-button v-if="scope.row.fileType===1" type="primary" text size="small">复制url
+                    <el-button v-if="scope.row.fileType===1" type="primary" @click="copyToClipboard(scope.row.filePath)" text size="small">复制路径
                     </el-button>
                     <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row)" type="primary" text
                                size="small">详情
@@ -143,6 +149,21 @@
                 </template>
             </el-table-column>
         </el-table>
+        <div class="table-font">
+            <span class="table-font-operation"><el-button @click="deleteFiles">删除所选</el-button></span>
+            <span class="table-font-operation" style="float: right">
+                <el-pagination
+                        v-model:current-page="pageData.index"
+                        v-model:page-size="pageData.size"
+                        :page-sizes="[10,20, 50, 100, 500]"
+                        :disabled="disabled"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :total="pageData.total"
+                        @size-change="diskInfo"
+                        @current-change="diskInfo"
+                />
+            </span>
+        </div>
     </div>
 
     <el-dialog title="新建目录" v-model="folderDrawer" width="80%"
@@ -164,18 +185,15 @@
     </el-dialog>
 
     <el-dialog
-            title="文件详情"
             v-model="fileDrawer"
             :before-close="fileDrawerClose">
-        <el-descriptions title="文件信息">
-            <el-image
-                    style="width: 100px; height: 100px"
-                    v-src="fileInfo.filePath"
-                    :preview-src-list="fileInfo.filePath"
-                    fit="contain"></el-image>
+        <el-image style="width: 400px; height: 400px;margin-left: 260px;" :preview-src-list="[fileInfo.filePath]"
+                  :src="fileInfo.filePath" fit="contain"/>
+        <el-descriptions title="文件信息" style="padding: 10px">
             <el-descriptions-item label="文件名">{{fileInfo.fileName}}</el-descriptions-item>
             <el-descriptions-item label="文件大小">{{fileInfo.fileSize}}</el-descriptions-item>
             <el-descriptions-item label="类型">{{fileInfo.fileType}}</el-descriptions-item>
+            <el-descriptions-item label="路径">{{fileInfo.filePath}}</el-descriptions-item>
         </el-descriptions>
     </el-dialog>
 
@@ -233,14 +251,12 @@
 
         <div slot="tip">图片路径： {{uploadImgUrl}}</div>
     </el-dialog>
-    <div ref="copyText" style="display: none;">{{ textToCopy }}</div>
 
 </template>
 <script>
     import axios from "axios";
     import {ElMessage} from "element-plus";
     import SparkMD5 from 'spark-md5'
-    import VueClipboard from 'vue-clipboard3';
 
     export default {
         data() {
@@ -252,8 +268,9 @@
                     target: '/disk/api/file/upload',
                     method: "multipart",
                     testMethod: "GET",
+                    successStatuses: [200],
                     uploadMethod: "POST",
-                    chunkSize: 1024 * 1024 * 5,  //5MB
+                    chunkSize: 1024 * 1024 * 3,  //5MB
                     fileParameterName: 'file', //上传文件时文件的参数名，默认file
                     singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
                     query: function (file, res, status) {
@@ -266,7 +283,6 @@
                         }
                         return param;
                     },
-                    maxChunkRetries: 3,  //最大自动失败重试上传次数
                     testChunks: true,     //是否开启服务器分片校验
                     checkChunkUploadedByResponse: function (chunk, message) {
                         let res = JSON.parse(message);
@@ -286,7 +302,8 @@
                 },
                 pageData: {
                     index: 1,
-                    size: 10
+                    size: 10,
+                    total: 0
                 },
                 fileList: [],
                 fileFolderId: "",
@@ -308,11 +325,13 @@
                 uploadImgDrawer: false,
                 imageShow: false,
                 imageShowUrl: "",
-                textToCopy: "",
-                navFolders: []
+                navFolders: [],
+                loadTable: true,
+                tableSelectRow: []
             }
         },
         mounted: function () {
+            this.loadParams();
             this.diskInfo();
             this.getFolderTree();
             axios({
@@ -328,6 +347,9 @@
             })
         },
         methods: {
+            selectionLineChangeHandle(row) {
+                this.tableSelectRow = row;
+            },
             imgSelectParentFolder(value) {
                 this.easyUploadForm.parentId = value.pop();
                 console.log(this.easyUploadForm.parentId)
@@ -335,13 +357,7 @@
             imgUploadSuccess(response, file, fileList) {
                 if (response.success) {
                     ElMessage.success("上传完成");
-                    navigator.clipboard.writeText(response.result)
-                        .then(() => {
-                            ElMessage.success(`路径已拷贝 Ctrl + c`);
-                        })
-                        .catch(err => {
-                            ElMessage.error(`复制失败: ${error} ！`);
-                        });
+                    this.copyToClipboard(response.result);
                     this.uploadImgUrl = response.result;
                     this.diskInfo();
                 } else {
@@ -365,7 +381,14 @@
                     }
                 })
             },
-            copyToClipboard() {
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        ElMessage.success(`路径已拷贝 Ctrl + c`);
+                    })
+                    .catch(err => {
+                        ElMessage.error(`复制失败: ${error} ！`);
+                    });
             },
             loadParams() {
                 var fileFolderId = this.$route.query.fileFolderId;
@@ -379,12 +402,7 @@
             },
             goRouter(id) {
                 let paths = this.$route.query.fileFolderId;
-                if (id == -1) {
-                    if (paths == null) {
-                        paths = id;
-                    } else {
-                        paths = paths + '%' + id;
-                    }
+                if (id === -1) {
                     this.$router.push({path: '/disk'});
                 } else {
                     if (paths == null) {
@@ -487,15 +505,13 @@
                 });
             },
             diskInfo() {
-                this.loadParams();
-
                 axios({
                     url: "/disk/api/file/getFiles",
                     method: "GET",
                     params: {
                         fileFolderId: this.fileFolderId,
-                        index: 1,
-                        size: 50,
+                        index: this.pageData.index,
+                        size: this.pageData.size,
                         nameCondition: "",
                         fileType: ""
                     }
@@ -505,13 +521,18 @@
                         //文件
                         var result = data.result;
                         this.fileList = result.infos.records;
+                        this.pageData.total = result.infos.total;
+                        this.loadTable = false;
                     } else {
                         ElMessage.error(data.message);
                     }
                 })
             },
 
-            deleteFile(row) {
+            deleteFile(row, batch) {
+                if (!batch) {
+                    row = [row];
+                }
                 this.$confirm('此操作将永久删除该文件, 是否继续?', '提示', {
                     confirmButtonText: '确定',
                     cancelButtonText: '取消',
@@ -628,6 +649,9 @@
                         ElMessage.error(data.message);
                     }
                 })
+            },
+            deleteFiles() {
+                this.deleteFile(this.tableSelectRow, true);
             }
         }
     }
@@ -706,9 +730,20 @@
         height: 100%;
         margin: 0 auto;
     }
-    .input-line{
+
+    .table-font {
+        position: sticky;
+    }
+
+    .table-font-operation {
+        display: inline-block;
+        padding-left: 10px;
+    }
+
+    .input-line {
         margin-left: 10px;
     }
+
     .aLink:hover {
         background-color: #E5F1FD;
     }
