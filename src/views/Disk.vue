@@ -1,15 +1,17 @@
 <template>
     <div class="main-top">
-        <h3>一个云盘</h3>
+        <h3 style="text-align: center;">一个云盘</h3>
         <div class="main-top-operation">
-            <span class="function-menu">
-            <uploader :options="options"
+            <uploader
+                      ref="uploader"
+                      :options="options"
                       :file-status-text="statusText"
                       :autoStart="false"
                       @file-added="filesAdded"
                       @file-success="onFileSuccess"
                       class="uploader-example">
                 <uploader-unsupport></uploader-unsupport>
+                <span class="function-menu">
                 <el-dropdown>
                     <el-button class="button-common" type="primary">
                         上传
@@ -28,15 +30,15 @@
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
+                </span>
+                <span class="function-menu">
+                    <el-button class="button-common" @click="folderDrawer = true">
+                        <i class="el-icon-folder-add"></i>
+                        <span>新建文件夹</span>
+                    </el-button>
+                </span>
                 <uploader-list v-show="uploadPanel"/>
-             </uploader>
-            </span>
-            <span class="function-menu">
-                <el-button class="button-common" @click="folderDrawer = true">
-                    <i class="el-icon-folder-add"></i>
-                    <span>新建文件夹</span>
-                </el-button>
-            </span>
+            </uploader>
         </div>
     </div>
 
@@ -137,14 +139,15 @@
                     key="slot"
                     width="300">
                 <template #default='scope'>
-                    <el-button v-if="scope.row.fileType===1" type="primary" @click="copyToClipboard(scope.row.filePath)" text size="small">复制路径
+                    <el-button v-if="scope.row.fileType===1" type="primary" @click="copyToClipboard(scope.row.filePath)"
+                               text size="small">复制路径
                     </el-button>
                     <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row)" type="primary" text
                                size="small">详情
                     </el-button>
                     <el-button v-if="!scope.row.folder" @click="downFile(scope.row)" type="primary" text size="small">下载
                     </el-button>
-                    <el-button @click="deleteFile(scope.row)" type="danger" text style="color: red" size="small">删除
+                    <el-button v-if="scope.row.folderId!==-1" @click="deleteFile(scope.row)" type="danger" text style="color: red" size="small">删除
                     </el-button>
                 </template>
             </el-table-column>
@@ -249,7 +252,7 @@
             </el-dialog>
         </div>
 
-        <div slot="tip">图片路径： {{uploadImgUrl}}</div>
+        <div>图片路径： {{uploadImgUrl}}</div>
     </el-dialog>
 
 </template>
@@ -259,40 +262,85 @@
     import SparkMD5 from 'spark-md5'
 
     export default {
+        setup (){
+            const options = {
+                target: '/disk/api/file/upload',
+                method: "multipart",
+                testMethod: "GET",
+                successStatuses: [200],
+                uploadMethod: "POST",
+                chunkSize: 1024 * 1024 * 3,  //5MB
+                fileParameterName: 'file', //上传文件时文件的参数名，默认file
+                singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
+                query: function (file, res, status) {
+                    // console.log(Math.floor(progress.value * 100))
+                    let param = {
+                        "fileType": file.getType(),
+                        "uploadId": file.uploadId
+                    }
+                    if (self.fileFolderId != null) {
+                        param.parentId = self.fileFolderId
+                    }
+                    return param;
+                },
+                testChunks: true,     //是否开启服务器分片校验
+                checkChunkUploadedByResponse: function (chunk, message) {
+                    let res = JSON.parse(message);
+                    if (!res.success) {
+                        console.log(res)
+                        return true;
+                    }
+                },
+                parseTimeRemaining: function (timeRemaining, parsedTimeRemaining) {
+                    return parsedTimeRemaining
+                        .replace(/\syears?/, '年')
+                        .replace(/\days?/, '天')
+                        .replace(/\shours?/, '小时')
+                        .replace(/\sminutes?/, '分钟')
+                        .replace(/\sseconds?/, '秒')
+                },
+                simultaneousUploads: 5, //并发上传数
+            }
+            return {
+                options
+            }
+        },
         data() {
             let self = this
             return {
+                testFile:{},
                 folderTree: [],
                 uploadPanel: false,
-                options: {
-                    target: '/disk/api/file/upload',
-                    method: "multipart",
-                    testMethod: "GET",
-                    successStatuses: [200],
-                    uploadMethod: "POST",
-                    chunkSize: 1024 * 1024 * 3,  //5MB
-                    fileParameterName: 'file', //上传文件时文件的参数名，默认file
-                    singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
-                    query: function (file, res, status) {
-                        let param = {
-                            "fileType": file.getType(),
-                            "uploadId": file.uploadId
-                        }
-                        if (self.fileFolderId != null) {
-                            param.parentId = self.fileFolderId
-                        }
-                        return param;
-                    },
-                    testChunks: true,     //是否开启服务器分片校验
-                    checkChunkUploadedByResponse: function (chunk, message) {
-                        let res = JSON.parse(message);
-                        if (!res.success) {
-                            console.log(res)
-                            return true;
-                        }
-                    },
-                    simultaneousUploads: 3, //并发上传数
-                },
+                // options: {
+                //     target: '/disk/api/file/upload',
+                //     method: "multipart",
+                //     testMethod: "GET",
+                //     successStatuses: [200],
+                //     uploadMethod: "POST",
+                //     chunkSize: 1024 * 1024 * 3,  //5MB
+                //     fileParameterName: 'file', //上传文件时文件的参数名，默认file
+                //     singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
+                //     query: function (file, res, status) {
+                //         // console.log(Math.floor(progress.value * 100))
+                //         let param = {
+                //             "fileType": file.getType(),
+                //             "uploadId": file.uploadId
+                //         }
+                //         if (self.fileFolderId != null) {
+                //             param.parentId = self.fileFolderId
+                //         }
+                //         return param;
+                //     },
+                //     testChunks: true,     //是否开启服务器分片校验
+                //     checkChunkUploadedByResponse: function (chunk, message) {
+                //         let res = JSON.parse(message);
+                //         if (!res.success) {
+                //             console.log(res)
+                //             return true;
+                //         }
+                //     },
+                //     simultaneousUploads: 5, //并发上传数
+                // },
                 statusText: {
                     success: "上传成功！",
                     error: "出错了！",
@@ -357,9 +405,10 @@
             imgUploadSuccess(response, file, fileList) {
                 if (response.success) {
                     ElMessage.success("上传完成");
-                    this.copyToClipboard(response.result);
                     this.uploadImgUrl = response.result;
+                    console.log(this.uploadImgUrl)
                     this.diskInfo();
+                    this.copyToClipboard(response.result);
                 } else {
                     ElMessage.error(response.message);
                 }
@@ -427,6 +476,7 @@
             },
             //上传文件前
             filesAdded(file, event) {
+                this.testFile = file;
                 this.uploadPanel = true;
                 //上传前校验该文件是否上传
                 file.pause();
@@ -456,7 +506,7 @@
                             }
                         } else {
                             //上传失败
-                            ElMessage.error("UpLoadFile Error");
+                            ElMessage.error(data.message);
                             file.cancel();
                             return false;
                         }
@@ -658,7 +708,6 @@
 </script>
 <style>
     .function-menu {
-        float: left;
     }
 
     .aLink {
@@ -721,7 +770,6 @@
     }
 
     .main-top {
-        text-align: center;
         margin: 0 auto;
     }
 
