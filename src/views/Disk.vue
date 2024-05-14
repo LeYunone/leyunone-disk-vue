@@ -3,13 +3,15 @@
         <h3 style="text-align: center;">一个云盘</h3>
         <div class="main-top-operation">
             <uploader
-                      ref="uploader"
-                      :options="options"
-                      :file-status-text="statusText"
-                      :autoStart="false"
-                      @file-added="filesAdded"
-                      @file-success="onFileSuccess"
-                      class="uploader-example">
+                    ref="uploader"
+                    :options="options"
+                    :file-status-text="statusText"
+                    :autoStart="false"
+                    @file-added="filesAdded"
+                    @file-removed="fileRemoved"
+                    @file-progress="onFileProgress"
+                    @file-success="onFileSuccess"
+                    class="uploader-example">
                 <uploader-unsupport></uploader-unsupport>
                 <span class="function-menu">
                 <el-dropdown>
@@ -44,6 +46,7 @@
 
     <div style="clear:both"></div>
     <div class="table-main">
+        <FileTable/>
         <el-breadcrumb style="margin-top:30px " separator="/">
             <el-breadcrumb-item>
                 <a @click="goRouter(-1)">首页</a>
@@ -147,7 +150,8 @@
                     </el-button>
                     <el-button v-if="!scope.row.folder" @click="downFile(scope.row)" type="primary" text size="small">下载
                     </el-button>
-                    <el-button v-if="scope.row.folderId!==-1" @click="deleteFile(scope.row)" type="danger" text style="color: red" size="small">删除
+                    <el-button v-if="scope.row.folderId!==-1" @click="deleteFile(scope.row)" type="danger" text
+                               style="color: red" size="small">删除
                     </el-button>
                 </template>
             </el-table-column>
@@ -262,85 +266,53 @@
     import SparkMD5 from 'spark-md5'
 
     export default {
-        setup (){
-            const options = {
-                target: '/disk/api/file/upload',
-                method: "multipart",
-                testMethod: "GET",
-                successStatuses: [200],
-                uploadMethod: "POST",
-                chunkSize: 1024 * 1024 * 3,  //5MB
-                fileParameterName: 'file', //上传文件时文件的参数名，默认file
-                singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
-                query: function (file, res, status) {
-                    // console.log(Math.floor(progress.value * 100))
-                    let param = {
-                        "fileType": file.getType(),
-                        "uploadId": file.uploadId
-                    }
-                    if (self.fileFolderId != null) {
-                        param.parentId = self.fileFolderId
-                    }
-                    return param;
-                },
-                testChunks: true,     //是否开启服务器分片校验
-                checkChunkUploadedByResponse: function (chunk, message) {
-                    let res = JSON.parse(message);
-                    if (!res.success) {
-                        console.log(res)
-                        return true;
-                    }
-                },
-                parseTimeRemaining: function (timeRemaining, parsedTimeRemaining) {
-                    return parsedTimeRemaining
-                        .replace(/\syears?/, '年')
-                        .replace(/\days?/, '天')
-                        .replace(/\shours?/, '小时')
-                        .replace(/\sminutes?/, '分钟')
-                        .replace(/\sseconds?/, '秒')
-                },
-                simultaneousUploads: 5, //并发上传数
-            }
-            return {
-                options
-            }
-        },
         data() {
             let self = this
             return {
-                testFile:{},
                 folderTree: [],
                 uploadPanel: false,
-                // options: {
-                //     target: '/disk/api/file/upload',
-                //     method: "multipart",
-                //     testMethod: "GET",
-                //     successStatuses: [200],
-                //     uploadMethod: "POST",
-                //     chunkSize: 1024 * 1024 * 3,  //5MB
-                //     fileParameterName: 'file', //上传文件时文件的参数名，默认file
-                //     singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
-                //     query: function (file, res, status) {
-                //         // console.log(Math.floor(progress.value * 100))
-                //         let param = {
-                //             "fileType": file.getType(),
-                //             "uploadId": file.uploadId
-                //         }
-                //         if (self.fileFolderId != null) {
-                //             param.parentId = self.fileFolderId
-                //         }
-                //         return param;
-                //     },
-                //     testChunks: true,     //是否开启服务器分片校验
-                //     checkChunkUploadedByResponse: function (chunk, message) {
-                //         let res = JSON.parse(message);
-                //         if (!res.success) {
-                //             console.log(res)
-                //             return true;
-                //         }
-                //     },
-                //     simultaneousUploads: 5, //并发上传数
-                // },
+                options: {
+                    target: '/disk/api/file/upload',
+                    method: "multipart",
+                    testMethod: "GET",
+                    uploadMethod: "POST",
+                    chunkSize: 1024 * 1024 * 3,  //5MB
+                    fileParameterName: 'file', //上传文件时文件的参数名，默认file
+                    singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
+                    query: function (file, res, status) {
+                        let param = {
+                            "fileType": file.getType(),
+                            "uploadId": file.uploadId
+                        }
+                        if (self.fileFolderId != null) {
+                            param.parentId = self.fileFolderId
+                        }
+                        return param;
+                    },
+                    testChunks: true,     //是否开启服务器分片校验
+                    checkChunkUploadedByResponse: function (chunk, message) {
+                        let res = JSON.parse(message);
+                        if (res.success) {
+                            if (res.result.skipUpload) {
+                                console.log("skip...")
+                                return true;
+                            }
+                            console.log(chunk);
+                            return (res.result.uploadedChunks || []).indexOf(chunk.offset + 1) >= 0;
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    },
+                    parseTimeRemaining: function (timeRemaining, parsedTimeRemaining) {
+                        return parsedTimeRemaining
+                            .replace(/\syears?/, '年')
+                            .replace(/\days?/, '天')
+                            .replace(/\shours?/, '小时')
+                            .replace(/\sminutes?/, '分钟')
+                            .replace(/\sseconds?/, '秒')
+                    },
+                    simultaneousUploads: 5, //并发上传数
+                },
                 statusText: {
                     success: "上传成功！",
                     error: "出错了！",
@@ -395,24 +367,32 @@
             })
         },
         methods: {
+            onFileProgress(rootFile, file, chunk) {
+            },
+            fileRemoved(file) {
+                //取消文件
+                axios({
+                    url:"/disk/api/file/cancelUpload",
+                    data:file,
+                    method:"POST"
+                })
+                console.log(file)
+            },
             selectionLineChangeHandle(row) {
                 this.tableSelectRow = row;
             },
             imgSelectParentFolder(value) {
                 this.easyUploadForm.parentId = value.pop();
-                console.log(this.easyUploadForm.parentId)
             },
             imgUploadSuccess(response, file, fileList) {
                 if (response.success) {
                     ElMessage.success("上传完成");
                     this.uploadImgUrl = response.result;
-                    console.log(this.uploadImgUrl)
                     this.diskInfo();
                     this.copyToClipboard(response.result);
                 } else {
                     ElMessage.error(response.message);
                 }
-                console.log(response)
             },
             showImageHandler(url) {
                 this.imageShowUrl = url;
@@ -461,7 +441,6 @@
                     }
                     this.$router.push({path: '/disk', query: {fileFolderId: paths}});
                 }
-
             },
             //云盘相关
             onFileSuccess: function (rootFile, file, response, chunk) {
@@ -476,10 +455,10 @@
             },
             //上传文件前
             filesAdded(file, event) {
-                this.testFile = file;
                 this.uploadPanel = true;
                 //上传前校验该文件是否上传
                 file.pause();
+                file.parentId = this.fileFolderId;
                 this.calculateMD5(file).then(() => {
                     axios({
                         url: "/disk/api/pre/requestUploadFile",
@@ -493,16 +472,16 @@
                         var data = res.data;
                         if (data.success) {
                             var responseType = data.result.responseType;
+                            if (responseType === 0) {
+                                ElMessage.success("重复文件...上传成功");
+                                file.cancel();
+                                this.diskInfo();
+                            }
                             if (responseType === 1) {
                                 file.uniqueIdentifier = data.result.identifier;
                                 file.uploadId = data.result.uploadId
                                 //继续上传
                                 file.resume();
-                            }
-                            if (responseType === 0) {
-                                ElMessage.success("上传成功");
-                                file.cancel();
-                                this.diskInfo();
                             }
                         } else {
                             //上传失败
