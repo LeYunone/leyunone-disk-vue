@@ -109,25 +109,22 @@
                 </template>
             </el-table-column>
         </el-table>
-    </div>
-
-    <el-dialog title="新建目录" v-model="folderDrawer" width="80%"
-               :before-close="folderDrawerClose">
-        <header class="header-font">
-            <h4>新建目录</h4>
-        </header>
-        <div style="margin-top: 10px">
-            <el-form status-icon label-width="100px">
-                <el-form-item label="目录名">
-                    <el-input v-model="newFolderName"></el-input>
-                </el-form-item>
-            </el-form>
+        <div class="table-font">
+            <span class="table-font-operation"><el-button @click="deleteFiles">删除所选</el-button></span>
+            <span class="table-font-operation" style="float: right">
+                <el-pagination
+                        v-model:current-page="pageData.index"
+                        v-model:page-size="pageData.size"
+                        :page-sizes="[10,20, 50, 100, 500]"
+                        :disabled="disabled"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :total="pageData.total"
+                        @size-change="diskInfo"
+                        @current-change="diskInfo"
+                />
+            </span>
         </div>
-        <footer class="footer-css">
-            <el-button class="button-common" type="primary" @click="createFolder">确定</el-button>
-            <el-button class="button-common" @click="folderDrawer = false">取消</el-button>
-        </footer>
-    </el-dialog>
+    </div>
 
     <el-dialog
             v-model="fileDrawer"
@@ -146,20 +143,28 @@
 <script>
     import axios from "axios";
     import {ElMessage} from "element-plus";
+    import bus from "../js/bus"
+
 
     export default {
+        setup(){
+
+        },
         data() {
             return {
                 fileList: [],
                 fileFolderId: "",
-                newFolderName: "",
-                folderDrawer: false,
                 fileDrawer: false,
                 fileInfo: {
                     filePath: "",
                     fileName: "",
                     fileType: "",
                     fileSize: ""
+                },
+                pageData: {
+                    index: 1,
+                    size: 10,
+                    total: 0
                 },
                 navFolders: [],
                 loadTable: true,
@@ -168,6 +173,7 @@
         },
         mounted: function () {
             this.loadParams();
+            this.diskInfo();
             axios({
                 url: "/disk/api/system/currentFolder",
                 params: {
@@ -179,8 +185,35 @@
                     this.navFolders = data.result;
                 }
             })
+            bus.on("diskInfo",(val)=>{
+                this.diskInfo();
+            })
         },
         methods: {
+            diskInfo() {
+                axios({
+                    url: "/disk/api/file/getFiles",
+                    method: "GET",
+                    params: {
+                        fileFolderId: this.fileFolderId,
+                        index: this.pageData.index,
+                        size: this.pageData.size,
+                        nameCondition: "",
+                        fileType: ""
+                    }
+                }).then((res) => {
+                    var data = res.data;
+                    this.loadTable = false;
+                    if (data.success) {
+                        //文件
+                        var result = data.result;
+                        this.fileList = result.infos.records;
+                        this.pageData.total = result.infos.total;
+                    } else {
+                        ElMessage.error(data.message);
+                    }
+                })
+            },
             selectionLineChangeHandle(row) {
                 this.tableSelectRow = row;
             },
@@ -203,23 +236,19 @@
                 }
                 this.fileFolderId = fileFolderId;
             },
-            newDiskInfo(){
-                this.$parent.diskInfo();
-            },
             goRouter(id) {
-                // let paths = this.$route.query.fileFolderId;
-                this.fileFolderId = id;
-                this.newDiskInfo();
-                // if (id === -1) {
-                //     this.$router.push({path: '/disk'});
-                // } else {
-                //     if (paths == null) {
-                //         paths = id;
-                //     } else {
-                //         paths = paths + '%' + id;
-                //     }
-                //     this.$router.push({path: '/disk/fileTable', query: {fileFolderId: paths}});
-                // }
+                let paths = this.$route.query.fileFolderId;
+                if (id === -1) {
+                    this.$route.params.f
+                    this.$router.push({path: '/disk'});
+                } else {
+                    if (paths == null) {
+                        paths = id;
+                    } else {
+                        paths = paths + '%' + id;
+                    }
+                    this.$router.push({path: '/disk/fileTable', query: {fileFolderId: paths}});
+                }
             },
             deleteFile(row, batch) {
                 if (!batch) {
@@ -241,7 +270,7 @@
                                 type: 'success',
                                 message: '删除成功!'
                             });
-                            this.newDiskInfo();
+                            this.diskInfo();
                         } else {
                             ElMessage.error(data.message);
                         }
@@ -272,7 +301,7 @@
                     downloadElement.click();
                     document.body.removeChild(downloadElement);
                     window.URL.revokeObjectURL(href);
-                    this.newDiskInfo();
+                    this.diskInfo();
                 })
             },
             downFile(row) {
@@ -297,17 +326,14 @@
                         document.body.appendChild(a)
                         a.click()
                         document.body.removeChild(a) // 下载完成移除元素
-                        this.newDiskInfo();
+                        this.diskInfo();
                     } else {
                         //上传失败
                         ElMessage.error(data.message);
                     }
                 })
             },
-            folderDrawerClose() {
-                this.folderDrawer = false;
-                this.newFolderName = "";
-            },
+
             openFileDrawer(row) {
                 this.fileInfo = row;
                 this.fileDrawer = true;
@@ -315,25 +341,6 @@
             fileDrawerClose() {
                 this.fileDrawer = false;
                 this.fileInfo = this.$options.data().fileInfo;
-            },
-            createFolder() {
-                axios({
-                    url: "/disk/api/file/newFolder",
-                    method: "POST",
-                    data: {
-                        "newFolderName": this.newFolderName,
-                        "parentId": this.fileFolderId
-                    }
-                }).then((res) => {
-                    var data = res.data;
-                    if (data.success) {
-                        this.newDiskInfo();
-                        this.folderDrawer = false;
-                    } else {
-                        //上传失败
-                        ElMessage.error(data.message);
-                    }
-                })
             },
             deleteFiles() {
                 this.deleteFile(this.tableSelectRow, true);

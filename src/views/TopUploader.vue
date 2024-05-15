@@ -1,6 +1,5 @@
 <template>
     <div id="global-uploader">
-        <h3 style="text-align: center;">一个云盘</h3>
         <div class="main-top-operation">
             <uploader
                     ref="uploader"
@@ -39,7 +38,9 @@
                         <span>新建文件夹</span>
                     </el-button>
                 </span>
-                <uploader-list v-show="uploadPanel"/>
+                <div style="margin-top: 14px">
+                    <uploader-list v-show="uploadPanel"/>
+                </div>
             </uploader>
         </div>
     </div>
@@ -98,16 +99,32 @@
 
         <div>图片路径： {{uploadImgUrl}}</div>
     </el-dialog>
-
+    <el-dialog title="新建目录" v-model="folderDrawer" width="80%"
+               :before-close="folderDrawerClose">
+        <header class="header-font">
+            <h4>新建目录</h4>
+        </header>
+        <div style="margin-top: 10px">
+            <el-form status-icon label-width="100px">
+                <el-form-item label="目录名">
+                    <el-input v-model="newFolderName"></el-input>
+                </el-form-item>
+            </el-form>
+        </div>
+        <footer class="footer-css">
+            <el-button class="button-common" type="primary" @click="createFolder">确定</el-button>
+            <el-button class="button-common" @click="folderDrawer = false">取消</el-button>
+        </footer>
+    </el-dialog>
 </template>
 
 <script>
     import axios from "axios";
     import {ElMessage} from "element-plus";
     import SparkMD5 from 'spark-md5'
+    import bus from "../js/bus"
 
     export default {
-        props:['fileFolderId'],
         data() {
             let self = this;
             return {
@@ -126,7 +143,7 @@
                             "fileType": file.getType(),
                             "uploadId": file.uploadId
                         }
-                        param.parentId = self.fileFolderId
+                        param.parentId = self.loadParams()
                         return param;
                     },
                     testChunks: true,     //是否开启服务器分片校验
@@ -167,16 +184,53 @@
                     parentId: "",
                     fileType: 1
                 },
+                newFolderName: "",
                 uploadImgDrawer: false,
                 imageShow: false,
                 imageShowUrl: "",
             }
         },
         mounted: function () {
-            console.log(this.fileFolderId)
             this.getFolderTree();
+            this.loadParams();
         },
         methods: {
+            handleBusDiskInfo(){
+                bus.emit("diskInfo")
+            },
+            folderDrawerClose() {
+                this.folderDrawer = false;
+                this.newFolderName = "";
+            },
+            createFolder() {
+                axios({
+                    url: "/disk/api/file/newFolder",
+                    method: "POST",
+                    data: {
+                        "newFolderName": this.newFolderName,
+                        "parentId": this.loadParams()
+                    }
+                }).then((res) => {
+                    var data = res.data;
+                    if (data.success) {
+                        this.handleBusDiskInfo();
+                        this.folderDrawer = false;
+                    } else {
+                        //上传失败
+                        ElMessage.error(data.message);
+                    }
+                })
+            },
+            loadParams() {
+                var fileFolderId = this.$route.query.fileFolderId;
+                if (fileFolderId != null) {
+                    var temp = this.$route.query.fileFolderId.split('%');
+                    fileFolderId = temp[temp.length - 1];
+                } else {
+                    fileFolderId = -1;
+                }
+                return fileFolderId;
+            },
             onFileProgress(rootFile, file, chunk) {
             },
             fileRemoved(file) {
@@ -189,12 +243,13 @@
                 console.log(file)
             },
             imgSelectParentFolder(value) {
+                console.log(value)
                 this.easyUploadForm.parentId = value.pop();
             },
             imgUploadSuccess(response, file, fileList) {
                 if (response.success) {
                     ElMessage.success("上传完成");
-                    this.$parent.diskInfo();
+                    this.handleBusDiskInfo();
                     this.uploadImgUrl = response.result;
                     this.copyToClipboard(response.result);
                 } else {
@@ -231,7 +286,7 @@
                 let res = JSON.parse(response);
                 if (res.success) {
                     ElMessage.success("上传完成");
-                    this.$parent.diskInfo();
+                    this.handleBusDiskInfo();
                 } else {
                     ElMessage.error(res.message);
                 }
@@ -242,14 +297,14 @@
                 this.uploadPanel = true;
                 //上传前校验该文件是否上传
                 file.pause();
-                file.parentId = this.fileFolderId;
+                file.parentId = this.loadParams();
                 this.calculateMD5(file).then(() => {
                     axios({
                         url: "/disk/api/pre/requestUploadFile",
                         method: "POST",
                         data: {
                             "uniqueIdentifier": file.uniqueIdentifier,
-                            "folderId": this.fileFolderId,
+                            "folderId": this.loadParams(),
                             "fileName": file.name
                         }
                     }).then((res) => {

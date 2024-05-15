@@ -8,17 +8,17 @@ const routes = [
     }, {
         path: "/disk",
         name: "disk",
-        // redirect: "/disk/fileTable",
+        redirect: "/disk/fileTable",
         meta: {
             title: '主站首页'
         },
         component: () => import ("../views/Disk.vue"),
-        // children: [
-        //     {
-        //         path:"fileTable",
-        //         component: () => import ("../views/FileTable.vue"),
-        //     }
-        // ]
+        children: [
+            {
+                path:"fileTable",
+                component: () => import ("../views/FileTable.vue"),
+            }
+        ]
     }
 ];
 
