@@ -147,9 +147,6 @@
 
 
     export default {
-        setup(){
-
-        },
         data() {
             return {
                 fileList: [],
@@ -185,7 +182,7 @@
                     this.navFolders = data.result;
                 }
             })
-            bus.on("diskInfo",(val)=>{
+            bus.on("diskInfo", (val) => {
                 this.diskInfo();
             })
         },
@@ -284,10 +281,10 @@
             },
             downFileStream(row) {
                 axios({
-                    url: "/disk/api/file/downloadFile",
+                    url: "/disk/api/file/downloadStream",
                     method: "POST",
                     data: {
-                        fileId: row.fileId,
+                        folderId: row.folderId,
                     },
                     responseType: 'blob'
                 }).then((res) => {
@@ -301,15 +298,21 @@
                     downloadElement.click();
                     document.body.removeChild(downloadElement);
                     window.URL.revokeObjectURL(href);
-                    this.diskInfo();
                 })
             },
             downFile(row) {
-                this.downFileHttp(row)
+                var diskEnv = row.diskEnv;
+                console.log(diskEnv)
+                if (diskEnv === 'oss') {
+                    this.downFileHttp(row);
+                }
+                if (diskEnv === 'local') {
+                    this.downFileStream(row);
+                }
             },
             downFileHttp(row) {
                 axios({
-                    url: "/disk/api/file/download",
+                    url: "/disk/api/file/downloadHttp",
                     method: "POST",
                     data: {
                         folderId: row.folderId,
@@ -326,7 +329,6 @@
                         document.body.appendChild(a)
                         a.click()
                         document.body.removeChild(a) // 下载完成移除元素
-                        this.diskInfo();
                     } else {
                         //上传失败
                         ElMessage.error(data.message);
