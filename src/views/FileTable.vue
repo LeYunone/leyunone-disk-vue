@@ -134,7 +134,7 @@
         <el-descriptions title="文件信息" style="padding: 10px">
             <el-descriptions-item label="文件名">{{fileInfo.fileName}}</el-descriptions-item>
             <el-descriptions-item label="文件大小">{{fileInfo.fileSize}}</el-descriptions-item>
-            <el-descriptions-item label="类型">{{fileInfo.fileType}}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{fileInfo.fileTypeText}}</el-descriptions-item>
             <el-descriptions-item label="路径">{{fileInfo.filePath}}</el-descriptions-item>
         </el-descriptions>
     </el-dialog>
@@ -156,7 +156,8 @@
                     filePath: "",
                     fileName: "",
                     fileType: "",
-                    fileSize: ""
+                    fileSize: "",
+                    fileTypeText:""
                 },
                 pageData: {
                     index: 1,

@@ -38,6 +38,15 @@
                         <span>新建文件夹</span>
                     </el-button>
                 </span>
+                <span class="function-menu">
+                    <el-input placeholder="请输入文件或文件夹前缀匹配" v-model="nameCondition" class="input-with-select">
+                        <template #append>
+                            <el-button>
+                                <el-icon><Search /></el-icon>
+                            </el-button>
+                        </template>
+                    </el-input>
+                </span>
                 <div style="margin-top: 14px">
                     <uploader-list v-show="uploadPanel"/>
                 </div>
@@ -129,6 +138,7 @@
             let self = this;
             return {
                 folderTree: [],
+                nameCondition:"",
                 uploadPanel: false,
                 options: {
                     target: '/disk/api/file/upload',
@@ -249,9 +259,9 @@
             imgUploadSuccess(response, file, fileList) {
                 if (response.success) {
                     ElMessage.success("上传完成");
-                    this.handleBusDiskInfo();
                     this.uploadImgUrl = response.result;
                     this.copyToClipboard(response.result);
+                    this.handleBusDiskInfo();
                 } else {
                     ElMessage.error(response.message);
                 }
