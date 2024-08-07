@@ -98,7 +98,7 @@
                     <el-button v-if="scope.row.fileType===1" type="primary" @click="copyToClipboard(scope.row.filePath)"
                                text size="small">复制路径
                     </el-button>
-                    <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row)" type="primary" text
+                    <el-button v-if="!scope.row.folder" @click="openFileDrawer(scope.row.fileId)" type="primary" text
                                size="small">详情
                     </el-button>
                     <el-button v-if="!scope.row.folder" @click="downFile(scope.row)" type="primary" text size="small">下载
@@ -129,8 +129,13 @@
     <el-dialog
             v-model="fileDrawer"
             :before-close="fileDrawerClose">
-        <el-image style="width: 400px; height: 400px;margin-left: 260px;" :preview-src-list="[fileInfo.filePath]"
+        <el-image v-if="fileInfo.fileType===1" style="width: 400px; height: 400px;margin-left: 260px;" :preview-src-list="[fileInfo.filePath]"
                   :src="fileInfo.filePath" fit="contain"/>
+        <!--        <v-md-editor v-if="fileInfo.fileType===4"  :model-value="fileInfo.fileContentText" mode="preview"></v-md-editor>-->
+        <div>
+            <v-md-preview v-if="fileInfo.fileType===4" :text="fileInfo.fileContentText"></v-md-preview>
+            <!--            <div>点击预览</div>-->
+        </div>
         <el-descriptions title="文件信息" style="padding: 10px">
             <el-descriptions-item label="文件名">{{fileInfo.fileName}}</el-descriptions-item>
             <el-descriptions-item label="文件大小">{{fileInfo.fileSize}}</el-descriptions-item>
@@ -157,7 +162,8 @@
                     fileName: "",
                     fileType: "",
                     fileSize: "",
-                    fileTypeText:""
+                    fileTypeText:"",
+                    fileContentText:""
                 },
                 pageData: {
                     index: 1,
@@ -285,7 +291,7 @@
                     url: "/disk/api/file/downloadStream",
                     method: "POST",
                     data: {
-                        folderId: row.folderId,
+                        folderId: row.folderId
                     },
                     responseType: 'blob'
                 }).then((res) => {
@@ -300,6 +306,16 @@
                     document.body.removeChild(downloadElement);
                     window.URL.revokeObjectURL(href);
                 })
+            },
+            downDecryptFile(row){
+                var diskEnv = row.diskEnv;
+                console.log(diskEnv)
+                if (diskEnv === 'oss') {
+                    this.downFileHttp(row,true);
+                }
+                if (diskEnv === 'local') {
+                    this.downFileStream(row,true);
+                }
             },
             downFile(row) {
                 var diskEnv = row.diskEnv;
@@ -337,9 +353,23 @@
                 })
             },
 
-            openFileDrawer(row) {
-                this.fileInfo = row;
-                this.fileDrawer = true;
+            openFileDrawer(fileId) {
+                axios({
+                    url: "/disk/api/file/detail",
+                    method: "GET",
+                    params: {
+                        fileId: fileId,
+                    }
+                }).then((res) => {
+                    var data = res.data;
+                    if (data.success) {
+                        //文件
+                        this.fileInfo = data.result;
+                        this.fileDrawer = true;
+                    } else {
+                        ElMessage.error(data.message);
+                    }
+                })
             },
             fileDrawerClose() {
                 this.fileDrawer = false;

@@ -39,7 +39,7 @@
                     </el-button>
                 </span>
                 <span class="function-menu">
-                    <el-input placeholder="请输入文件或文件夹前缀匹配" v-model="nameCondition" class="input-with-select">
+                    <el-input placeholder="请输入文件或文件夹前缀匹配" size="small" v-model="nameCondition" class="input-with-select">
                         <template #append>
                             <el-button>
                                 <el-icon><Search /></el-icon>
@@ -148,7 +148,9 @@
                     chunkSize: 1024 * 1024 * 3,  //5MB
                     fileParameterName: 'file', //上传文件时文件的参数名，默认file
                     singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
-                    query: function (file, res, status) {
+                    query: function (file, chunk) {
+                        console.log(file);
+                        console.log(chunk)
                         let param = {
                             "fileType": file.getType(),
                             "uploadId": file.uploadId
@@ -213,6 +215,10 @@
                 this.newFolderName = "";
             },
             createFolder() {
+                if(this.newFolderName.trim() === ""){
+                    ElMessage.error("目录名为空");
+                    return;
+                }
                 axios({
                     url: "/disk/api/file/newFolder",
                     method: "POST",
@@ -324,6 +330,7 @@
                             if (responseType === 0) {
                                 ElMessage.success("重复文件...上传成功");
                                 file.cancel();
+                                this.handleBusDiskInfo();
                             }
                             if (responseType === 1) {
                                 file.uniqueIdentifier = data.result.identifier;
