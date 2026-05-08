@@ -1,9 +1,9 @@
-import {defineConfig} from 'vite'
-import vue from '@vitejs/plugin-vue'
-import path from 'path'
+const {defineConfig} = require('vite')
+const vue = require('@vitejs/plugin-vue')
+const path = require('path')
 
 // https://vitejs.dev/config/
-export default defineConfig({
+module.exports = defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src')
@@ -29,13 +29,11 @@ export default defineConfig({
                 changeOrigin: true,
                 secure: false
             }
-
         }
     },
     optimizeDeps: {
     },
-    //生产模式打包配置
     build: {
-        outDir: 'dist',//Specify the output directory (relative to project root).
+        outDir: 'dist',
     }
 })

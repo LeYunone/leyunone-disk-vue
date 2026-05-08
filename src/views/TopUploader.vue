@@ -1,129 +1,136 @@
 <template>
     <div id="global-uploader">
-        <div class="main-top-operation">
-            <uploader
-                    ref="uploader"
-                    :options="options"
-                    :file-status-text="statusText"
-                    :autoStart="false"
-                    @file-added="filesAdded"
-                    @file-removed="fileRemoved"
-                    @file-progress="onFileProgress"
-                    @file-success="onFileSuccess"
-                    class="uploader-example">
-                <uploader-unsupport></uploader-unsupport>
-                <span class="function-menu">
-                <el-dropdown>
-                    <el-button class="button-common" type="primary">
-                        上传
+        <div class="upload-toolbar">
+            <div class="toolbar-actions">
+                <el-dropdown trigger="click">
+                    <el-button type="primary" round>
+                        <el-icon><Upload /></el-icon>
+                        <span>上传文件</span>
                     </el-button>
                     <template #dropdown>
                         <el-dropdown-menu>
-                            <el-dropdown-item>
-                                <uploader-btn>上传文件</uploader-btn>
-                            </el-dropdown-item>
-                            <el-dropdown-item>
-                                <uploader-btn :directory="true">上传文件夹</uploader-btn>
-                            </el-dropdown-item>
-                            <el-dropdown-item>
-                                <button @click="uploadImgDrawer = true">发布图片</button>
-                            </el-dropdown-item>
+                            <el-dropdown-item @click="triggerFileInput(false)">上传文件</el-dropdown-item>
+                            <el-dropdown-item @click="triggerFileInput(true)">上传文件夹</el-dropdown-item>
+                            <el-dropdown-item @click="uploadImgDrawer = true">发布图片</el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
-                </span>
-                <span class="function-menu">
-                    <el-button class="button-common" @click="folderDrawer = true">
-                        <i class="el-icon-folder-add"></i>
-                        <span>新建文件夹</span>
-                    </el-button>
-                </span>
-                <span class="function-menu">
-                    <el-input placeholder="请输入文件或文件夹前缀匹配" size="small" v-model="nameCondition" class="input-with-select">
-                        <template #append>
-                            <el-button>
-                                <el-icon><Search /></el-icon>
-                            </el-button>
-                        </template>
-                    </el-input>
-                </span>
-                <div style="margin-top: 14px">
-                    <uploader-list v-show="uploadPanel"/>
-                </div>
-            </uploader>
+                <input
+                    ref="fileInput"
+                    type="file"
+                    style="display: none"
+                    :webkitdirectory="isFolderUpload"
+                    @change="handleFileSelect"
+                />
+                <el-button round @click="folderDrawer = true">
+                    <el-icon><FolderAdd /></el-icon>
+                    <span>新建文件夹</span>
+                </el-button>
+                <el-input
+                    placeholder="找找看有什么文件喵~"
+                    size="default"
+                    v-model="nameCondition"
+                    class="search-input"
+                    clearable
+                >
+                    <template #prefix>
+                        <el-icon><Search /></el-icon>
+                    </template>
+                </el-input>
+            </div>
         </div>
+
+        <!-- Upload Progress Panel -->
+        <transition name="slide-down">
+            <div v-if="uploadTasks.length > 0" class="upload-panel">
+                <div class="panel-corner-star" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2L14.09 8.26L20.18 8.63L15.54 12.64L17.12 19.37L12 15.77L6.88 19.37L8.46 12.64L3.82 8.63L9.91 8.26L12 2Z" fill="#ff6b9d"/>
+                    </svg>
+                </div>
+                <div class="panel-header">
+                    <span class="panel-title">上传列表 ({{uploadTasks.length}})</span>
+                    <el-button text size="small" @click="clearCompleted">清空已完成</el-button>
+                </div>
+                <div class="upload-list">
+                    <div v-for="task in uploadTasks" :key="task.id" class="upload-item">
+                        <div class="upload-item-info">
+                            <span class="upload-item-name">{{task.fileName}}</span>
+                            <span class="upload-item-status" :class="task.status">
+                                <template v-if="task.status === 'uploading'">{{task.progress}}%</template>
+                                <template v-else-if="task.status === 'success'">完成 ✨</template>
+                                <template v-else-if="task.status === 'error'">失败 💦</template>
+                                <template v-else>等待中...</template>
+                            </span>
+                        </div>
+                        <el-progress
+                            :percentage="task.progress"
+                            :status="task.status === 'error' ? 'exception' : task.status === 'success' ? 'success' : ''"
+                            :stroke-width="6"
+                            :show-text="false"
+                        />
+                    </div>
+                </div>
+            </div>
+        </transition>
     </div>
 
+    <!-- Image Upload Drawer -->
     <el-dialog
-            width="700px"
-            title="发布图片"
-            drag
-            v-model="uploadImgDrawer"
-            :before-close="uploadImgDrawerClose">
+        width="600px"
+        title="发布图片"
+        v-model="uploadImgDrawer"
+        :before-close="uploadImgDrawerClose"
+        class="fresh-dialog"
+        :fullscreen="isMobile"
+        round>
         <div class="block">
             <span class="input-line">
                 <span class="demonstration">文件夹：</span>
                 <el-cascader
-                        placeholder="搜索"
-                        :options="folderTree"
-                        @change="imgSelectParentFolder"
-                        :props="{ checkStrictly: true }"
-                        filterable></el-cascader>
+                    placeholder="选择文件夹"
+                    :options="folderTree"
+                    @change="imgSelectParentFolder"
+                    :props="{ checkStrictly: true }"
+                    filterable
+                    clearable
+                />
             </span>
             <span class="input-line">
-                <span class="demonstration">创建日期前缀 年-月-日：</span>
-                <el-switch
-                        v-model="easyUploadForm.hasDate"
-                        active-color="#13ce66"
-                        inactive-color="#ff4949">
-                </el-switch>
+                <span class="demonstration">日期前缀：</span>
+                <el-switch v-model="easyUploadForm.hasDate" />
             </span>
         </div>
-        <div style="padding: 25px">
+        <div style="padding: 20px">
             <el-upload action="/disk/api/file/upload"
                        :data="easyUploadForm"
                        :drag="true"
                        :on-success="imgUploadSuccess"
                        list-type="picture-card"
                        :auto-upload="true">
-                <el-icon>
-                    <Plus/>
-                </el-icon>
-                <template #file="{ file }">
-                    <div><img class="el-upload-list__item-thumbnail" :src="file.url" alt=""/>
-                        <span class="el-upload-list__item-actions">
-                      <span class="el-upload-list__item-preview"
-                            @click="showImageHandler(file.url)">
-                        <el-icon><zoom-in/></el-icon>
-                      </span>
-                    </span>
-                    </div>
-                </template>
+                <el-icon class="upload-icon"><Plus /></el-icon>
             </el-upload>
-
-            <el-dialog v-model="imageShow">
-                <img w-full :src="imageShowUrl" alt="Preview Image"/>
-            </el-dialog>
         </div>
-
-        <div>图片路径： {{uploadImgUrl}}</div>
+        <div v-if="uploadImgUrl" class="upload-img-url">图片路径：{{uploadImgUrl}}</div>
     </el-dialog>
-    <el-dialog title="新建目录" v-model="folderDrawer" width="80%"
-               :before-close="folderDrawerClose">
-        <header class="header-font">
-            <h4>新建目录</h4>
-        </header>
-        <div style="margin-top: 10px">
-            <el-form status-icon label-width="100px">
-                <el-form-item label="目录名">
-                    <el-input v-model="newFolderName"></el-input>
-                </el-form-item>
-            </el-form>
-        </div>
-        <footer class="footer-css">
-            <el-button class="button-common" type="primary" @click="createFolder">确定</el-button>
-            <el-button class="button-common" @click="folderDrawer = false">取消</el-button>
-        </footer>
+
+    <!-- New Folder Dialog -->
+    <el-dialog
+        title="新建目录"
+        v-model="folderDrawer"
+        width="420px"
+        :before-close="folderDrawerClose"
+        :fullscreen="isMobile"
+        class="fresh-dialog">
+        <el-form label-width="80px" label-position="top">
+            <el-form-item label="目录名称">
+                <el-input v-model="newFolderName" placeholder="请输入目录名" clearable />
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="folderDrawer = false">取消</el-button>
+            <el-button type="primary" @click="createFolder">确定</el-button>
+        </template>
     </el-dialog>
 </template>
 
@@ -132,64 +139,24 @@
     import {ElMessage} from "element-plus";
     import SparkMD5 from 'spark-md5'
     import bus from "../js/bus"
+    import OssUpload from "../js/oss-upload"
 
     export default {
+        computed: {
+            isMobile() {
+                return window.innerWidth <= 768;
+            }
+        },
         data() {
-            let self = this;
             return {
                 folderTree: [],
-                nameCondition:"",
-                uploadPanel: false,
-                options: {
-                    target: '/disk/api/file/upload',
-                    method: "multipart",
-                    testMethod: "GET",
-                    uploadMethod: "POST",
-                    chunkSize: 1024 * 1024 * 3,  //5MB
-                    fileParameterName: 'file', //上传文件时文件的参数名，默认file
-                    singleFile: false, // 启用单个文件上传。上传一个文件后，第二个文件将超过现有文件，第一个文件将被取消。
-                    query: function (file, chunk) {
-                        console.log(file);
-                        console.log(chunk)
-                        let param = {
-                            "fileType": file.getType(),
-                            "uploadId": file.uploadId
-                        }
-                        param.parentId = self.loadParams()
-                        return param;
-                    },
-                    testChunks: true,     //是否开启服务器分片校验
-                    checkChunkUploadedByResponse: function (chunk, message) {
-                        let res = JSON.parse(message);
-                        if (res.success) {
-                            if (res.result.skipUpload) {
-                                console.log("skip...")
-                                return true;
-                            }
-                            console.log(chunk);
-                            return (res.result.uploadedChunks || []).indexOf(chunk.offset + 1) >= 0;
-                        } else {
-                            ElMessage.error(res.message);
-                        }
-                    },
-                    parseTimeRemaining: function (timeRemaining, parsedTimeRemaining) {
-                        return parsedTimeRemaining
-                            .replace(/\syears?/, '年')
-                            .replace(/\days?/, '天')
-                            .replace(/\shours?/, '小时')
-                            .replace(/\sminutes?/, '分钟')
-                            .replace(/\sseconds?/, '秒')
-                    },
-                    simultaneousUploads: 5, //并发上传数
-                },
-                statusText: {
-                    success: "上传成功！",
-                    error: "出错了！",
-                    uploading: "上传中...",
-                    paused: "等待中...",
-                    waiting: "等待中..."
-                },
+                nameCondition: "",
+                uploadTasks: [],
+                taskIdCounter: 0,
+                isFolderUpload: false,
                 folderDrawer: false,
+                uploadImgDrawer: false,
+                uploadImgUrl: "",
                 easyUploadForm: {
                     hasDate: true,
                     easyUpload: true,
@@ -197,46 +164,122 @@
                     fileType: 1
                 },
                 newFolderName: "",
-                uploadImgDrawer: false,
-                imageShow: false,
-                imageShowUrl: "",
             }
         },
         mounted: function () {
             this.getFolderTree();
-            this.loadParams();
         },
         methods: {
-            handleBusDiskInfo(){
-                bus.emit("diskInfo")
+            handleBusDiskInfo() {
+                bus.emit("diskInfo");
             },
+
+            triggerFileInput(isFolder) {
+                this.isFolderUpload = isFolder;
+                this.$nextTick(() => {
+                    this.$refs.fileInput.click();
+                });
+            },
+
+            handleFileSelect(event) {
+                const files = event.target.files;
+                if (!files || files.length === 0) return;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file.size === 0) continue;
+                    this.processFile(file);
+                }
+                // Reset input so same file can be re-selected
+                event.target.value = '';
+            },
+
+            processFile(file) {
+                const task = {
+                    id: ++this.taskIdCounter,
+                    fileName: file.name,
+                    progress: 0,
+                    status: 'pending', // pending, uploading, success, error
+                    file: file
+                };
+                this.uploadTasks.push(task);
+
+                // Calculate MD5 then upload
+                this.calculateMD5(file).then(md5 => {
+                    // Check dedup first
+                    return axios.post("/disk/api/pre/requestUploadFile", {
+                        uniqueIdentifier: md5,
+                        folderId: this.loadParams(),
+                        fileName: file.name
+                    }).then(res => {
+                        const data = res.data;
+                        if (!data.success) {
+                            task.status = 'error';
+                            ElMessage.error(data.message);
+                            return;
+                        }
+                        const responseType = data.result.responseType;
+                        if (responseType === 0) {
+                            // File already exists (dedup / 秒传)
+                            task.progress = 100;
+                            task.status = 'success';
+                            ElMessage.success("文件已存在，秒传成功");
+                            this.handleBusDiskInfo();
+                            return;
+                        }
+                        // New file - upload via presigned URL
+                        task.status = 'uploading';
+                        const extension = file.name.substring(file.name.lastIndexOf('.') + 1);
+                        return OssUpload.upload(file, {
+                            md5: md5,
+                            folderId: this.loadParams(),
+                            fileName: file.name,
+                            fileType: extension,
+                            onProgress: (percent) => {
+                                task.progress = percent;
+                            }
+                        }).then(() => {
+                            task.status = 'success';
+                            task.progress = 100;
+                            ElMessage.success(`${file.name} 上传完成`);
+                            this.handleBusDiskInfo();
+                        });
+                    });
+                }).catch(err => {
+                    task.status = 'error';
+                    console.error('Upload error:', err);
+                    ElMessage.error(`${file.name} 上传失败`);
+                });
+            },
+
+            clearCompleted() {
+                this.uploadTasks = this.uploadTasks.filter(t => t.status !== 'success' && t.status !== 'error');
+            },
+
             folderDrawerClose() {
                 this.folderDrawer = false;
                 this.newFolderName = "";
             },
+
             createFolder() {
-                if(this.newFolderName.trim() === ""){
+                if (this.newFolderName.trim() === "") {
                     ElMessage.error("目录名为空");
                     return;
                 }
-                axios({
-                    url: "/disk/api/file/newFolder",
-                    method: "POST",
-                    data: {
-                        "newFolderName": this.newFolderName,
-                        "parentId": this.loadParams()
-                    }
-                }).then((res) => {
-                    var data = res.data;
-                    if (data.success) {
+                axios.post("/disk/api/file/newFolder", {
+                    newFolderName: this.newFolderName,
+                    parentId: this.loadParams()
+                }).then(res => {
+                    if (res.data.success) {
                         this.handleBusDiskInfo();
                         this.folderDrawer = false;
+                        this.newFolderName = "";
                     } else {
-                        //上传失败
-                        ElMessage.error(data.message);
+                        ElMessage.error(res.data.message);
                     }
-                })
+                });
             },
+
             loadParams() {
                 var fileFolderId = this.$route.query.fileFolderId;
                 if (fileFolderId != null) {
@@ -247,22 +290,12 @@
                 }
                 return fileFolderId;
             },
-            onFileProgress(rootFile, file, chunk) {
-            },
-            fileRemoved(file) {
-                //取消文件
-                axios({
-                    url:"/disk/api/file/cancelUpload",
-                    data:file,
-                    method:"POST"
-                })
-                console.log(file)
-            },
+
             imgSelectParentFolder(value) {
-                console.log(value)
-                this.easyUploadForm.parentId = value.pop();
+                this.easyUploadForm.parentId = value ? value.pop() : -1;
             },
-            imgUploadSuccess(response, file, fileList) {
+
+            imgUploadSuccess(response) {
                 if (response.success) {
                     ElMessage.success("上传完成");
                     this.uploadImgUrl = response.result;
@@ -272,216 +305,250 @@
                     ElMessage.error(response.message);
                 }
             },
-            showImageHandler(url) {
-                this.imageShowUrl = url;
-                this.imageShow = true;
-            },
+
             getFolderTree() {
-                axios({
-                    url: "/disk/api/system/folderTree",
-                    method: "GET",
-                }).then((res) => {
-                    var data = res.data;
-                    if (data.success) {
-                        this.folderTree = data.result;
-                    } else {
+                axios.get("/disk/api/system/folderTree").then(res => {
+                    if (res.data.success) {
+                        this.folderTree = res.data.result;
                     }
-                })
+                });
             },
+
             copyToClipboard(text) {
                 navigator.clipboard.writeText(text)
-                    .then(() => {
-                        ElMessage.success(`路径已拷贝 Ctrl + c`);
-                    })
-                    .catch(err => {
-                        ElMessage.error(`复制失败: ${error} ！`);
-                    });
+                    .then(() => ElMessage.success("路径已拷贝"))
+                    .catch(() => ElMessage.error("复制失败"));
             },
-            //云盘相关
-            onFileSuccess: function (rootFile, file, response, chunk) {
-                let res = JSON.parse(response);
-                if (res.success) {
-                    ElMessage.success("上传完成");
-                    this.handleBusDiskInfo();
-                } else {
-                    ElMessage.error(res.message);
-                }
-            },
-            //上传文件前
-            filesAdded(file, event) {
-                this.testFile = file;
-                this.uploadPanel = true;
-                //上传前校验该文件是否上传
-                file.pause();
-                file.parentId = this.loadParams();
-                this.calculateMD5(file).then(() => {
-                    axios({
-                        url: "/disk/api/pre/requestUploadFile",
-                        method: "POST",
-                        data: {
-                            "uniqueIdentifier": file.uniqueIdentifier,
-                            "folderId": this.loadParams(),
-                            "fileName": file.name
-                        }
-                    }).then((res) => {
-                        var data = res.data;
-                        if (data.success) {
-                            var responseType = data.result.responseType;
-                            if (responseType === 0) {
-                                ElMessage.success("重复文件...上传成功");
-                                file.cancel();
-                                this.handleBusDiskInfo();
-                            }
-                            if (responseType === 1) {
-                                file.uniqueIdentifier = data.result.identifier;
-                                file.uploadId = data.result.uploadId
-                                //继续上传
-                                file.resume();
-                            }
-                        } else {
-                            //上传失败
-                            ElMessage.error(data.message);
-                            file.cancel();
-                            return false;
-                        }
-                    })
-                }).catch(error => {
-                });
-            },
-            calculateMD5(file) {
-                return new Promise((resolve, reject) => {
-                    const fileReader = new FileReader()
-                    const time = new Date().getTime()
-                    const blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice
-                    let currentChunk = 0
-                    const chunkSize = 5 * 1024 * 1000
-                    const chunks = Math.ceil(file.size / chunkSize)
-                    const spark = new SparkMD5.ArrayBuffer()
-                    //只计算第一片文件md5码
-                    const chunkNumberMD5 = 1
 
-                    loadNext()
-                    fileReader.onload = e => {
-                        spark.append(e.target.result)
-
-                        if (currentChunk < chunkNumberMD5) {
-                            loadNext()
-                        } else {
-                            const md5 = spark.end()
-                            file.uniqueIdentifier = md5
-                            console.log(`MD5计算完毕：${file.name} \nMD5：${md5} \n分片：${chunks} 大小:${file.size} 用时：${new Date().getTime() - time} ms`)
-                        }
-                        resolve();
-                    }
-                    fileReader.onerror = function () {
-                        reject();
-                        ElMessage.error(`文件${file.name}读取出错，请检查该文件`)
-                        file.cancel()
-                    }
-
-                    function loadNext() {
-                        const start = currentChunk * chunkSize
-                        const end = ((start + chunkSize) >= file.size) ? file.size : start + chunkSize
-
-                        fileReader.readAsArrayBuffer(blobSlice.call(file.file, start, end))
-                        currentChunk++
-                    }
-                });
-            },
             uploadImgDrawerClose() {
                 this.uploadImgDrawer = false;
                 this.uploadImgUrl = "";
             },
+
+            calculateMD5(file) {
+                return new Promise((resolve, reject) => {
+                    const fileReader = new FileReader();
+                    const blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice;
+                    let currentChunk = 0;
+                    const chunkSize = 5 * 1024 * 1000;
+                    const spark = new SparkMD5.ArrayBuffer();
+                    // Only compute first chunk for performance
+                    const chunkNumberMD5 = 1;
+
+                    loadNext();
+                    fileReader.onload = e => {
+                        spark.append(e.target.result);
+                        if (currentChunk < chunkNumberMD5) {
+                            loadNext();
+                        } else {
+                            const md5 = spark.end();
+                            console.log(`MD5: ${md5} file: ${file.name}`);
+                            resolve(md5);
+                        }
+                    };
+                    fileReader.onerror = () => {
+                        reject();
+                        ElMessage.error(`文件${file.name}读取出错`);
+                    };
+
+                    function loadNext() {
+                        const start = currentChunk * chunkSize;
+                        const end = ((start + chunkSize) >= file.size) ? file.size : start + chunkSize;
+                        fileReader.readAsArrayBuffer(blobSlice.call(file, start, end));
+                        currentChunk++;
+                    }
+                });
+            },
         }
     }
 </script>
-<style>
-    .function-menu {
-    }
 
-    .aLink {
-        display: inline-flex;
-        border: none;
-        width: 3rem;
-        height: 3rem;
+<style scoped>
+    .upload-toolbar {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        line-height: 1;
-        transition-property: all;
-        transition-duration: .3s;
-        transition-delay: 0s;
+        padding: 12px 0;
     }
 
-    .header-font {
-        -webkit-box-flex: 1;
-        color: #333;
-        -ms-flex: 1;
-        flex: 1;
-        font-size: 16px;
-        font-weight: 400;
-        margin: 0;
+    .toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .search-input {
+        width: 240px;
+    }
+
+    .search-input :deep(.el-input__wrapper) {
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1.5px solid rgba(196, 77, 255, 0.15);
+    }
+
+    /* Upload Progress Panel */
+    .upload-panel {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(8px);
+        border-radius: 16px;
+        border: 2px dashed rgba(196, 77, 255, 0.18);
+        box-shadow: 0 4px 20px rgba(196, 77, 255, 0.08);
+        padding: 12px 16px;
+        margin-top: 8px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .panel-corner-star {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        animation: twinkle 2s ease-in-out infinite;
+    }
+
+    @keyframes twinkle {
+        0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        50% { opacity: 0.5; transform: scale(0.7) rotate(20deg); }
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .panel-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #8c5c8a;
+    }
+
+    .upload-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .upload-item {
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(196, 77, 255, 0.06);
+    }
+
+    .upload-item:last-child {
+        border-bottom: none;
+    }
+
+    .upload-item-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+
+    .upload-item-name {
+        font-size: 13px;
+        color: #4a3548;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        border-bottom: 1px solid #ebebeb;
-        height: 60px;
-        padding: 0 64px 0 24px;
-
-        -webkit-box-align: center;
-        -ms-flex-align: center;
-        align-items: center;
-        display: flex;
+        max-width: 70%;
     }
 
-    .footer-css {
-        -webkit-box-align: center;
-        -ms-flex-align: center;
-        align-items: center;
-        border-top: 1px solid #ebebeb;
-        display: -webkit-box;
-        display: -ms-flexbox;
-        display: flex;
-        -ms-flex-wrap: wrap;
-        /* flex-wrap: wrap; */
-        padding: 16px 24px;
-        text-align: left;
+    .upload-item-status {
+        font-size: 12px;
+        font-weight: 500;
     }
 
-    .button-common {
-        margin-left: 10px;
+    .upload-item-status.uploading {
+        color: #c44dff;
     }
 
-    .table-main {
-        width: 60%;
-        height: 100%;
-        margin: 0 auto;
+    .upload-item-status.success {
+        color: #ff6b9d;
     }
 
-    .main-top {
-        margin: 0 auto;
+    .upload-item-status.error {
+        color: #e74c8b;
     }
 
-    .main-top-operation {
-        width: 60%;
-        height: 100%;
-        margin: 0 auto;
+    .upload-item-status.pending {
+        color: #b07cc6;
     }
 
-    .table-font {
-        position: sticky;
+    .upload-icon {
+        font-size: 28px;
+        color: #c44dff;
     }
 
-    .table-font-operation {
-        display: inline-block;
-        padding-left: 10px;
+    .upload-img-url {
+        padding: 10px 0;
+        color: #b07cc6;
+        font-size: 13px;
     }
 
     .input-line {
         margin-left: 10px;
     }
 
-    .aLink:hover {
-        background-color: #E5F1FD;
+    /* Slide-down transition */
+    .slide-down-enter-active,
+    .slide-down-leave-active {
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        max-height: 300px;
+        overflow: hidden;
+    }
+
+    .slide-down-enter-from,
+    .slide-down-leave-to {
+        max-height: 0;
+        opacity: 0;
+        padding: 0 16px;
+    }
+
+    /* Fresh dialog styling */
+    :deep(.fresh-dialog .el-dialog) {
+        border-radius: 20px;
+    }
+
+    :deep(.fresh-dialog .el-dialog__header) {
+        padding: 16px 20px;
+        border-bottom: 2px dashed rgba(196, 77, 255, 0.12);
+        background: linear-gradient(135deg, rgba(255, 107, 157, 0.06), rgba(196, 77, 255, 0.06));
+    }
+
+    :deep(.fresh-dialog .el-dialog__body) {
+        padding: 20px;
+    }
+
+    /* === Mobile Responsive === */
+    @media (max-width: 768px) {
+        .toolbar-actions {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .search-input {
+            width: 100%;
+            order: 10;
+        }
+
+        .upload-panel {
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .upload-toolbar {
+            padding: 8px 0;
+        }
+
+        .toolbar-actions :deep(.el-button span) {
+            display: none;
+        }
+
+        .toolbar-actions :deep(.el-button .el-icon) {
+            margin: 0;
+        }
     }
 </style>
