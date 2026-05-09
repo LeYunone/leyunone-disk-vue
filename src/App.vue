@@ -386,7 +386,7 @@
         }
 
         .app-header {
-            padding-top: 14px;
+            padding-top: 0;
         }
 
         .cat-ear {
@@ -394,46 +394,86 @@
         }
 
         .header-content {
-            padding: 10px 16px;
+            padding: 10px 12px;
         }
 
         .header-sticker {
             display: none;
         }
 
+        .logo-text {
+            font-size: 17px;
+        }
+
         .app-main {
-            padding: 12px 12px 32px;
+            padding: 10px 10px 32px;
         }
 
         .side-decoration {
             display: none;
         }
 
+        .app-footer {
+            padding: 12px 12px;
+        }
+
         .footer-content {
-            gap: 8px;
+            gap: 6px;
         }
 
         .footer-text {
-            font-size: 12px;
+            font-size: 11px;
         }
 
+        /* Global dialog mobile */
         .el-dialog {
-            width: 92vw !important;
-            margin: 8px auto;
+            width: 94vw !important;
+            margin: 4vh auto !important;
+            border-radius: 14px !important;
         }
 
-        .el-table__body-wrapper {
-            overflow-x: auto;
+        .el-dialog__header {
+            padding: 12px 16px !important;
+        }
+
+        .el-dialog__body {
+            padding: 14px !important;
+        }
+
+        /* Global table mobile */
+        .el-table th.el-table__cell,
+        .el-table td.el-table__cell {
+            font-size: 12px;
+            padding: 6px 0;
+        }
+
+        /* Message box */
+        .el-message-box {
+            width: 88vw !important;
+        }
+
+        /* Overlay */
+        .el-overlay {
+            overflow-y: auto;
         }
     }
 
     @media (max-width: 480px) {
         .app-main {
-            padding: 8px 8px 24px;
+            padding: 6px 6px 24px;
+        }
+
+        .header-content {
+            padding: 8px 8px;
         }
 
         .footer-content {
             flex-wrap: wrap;
+        }
+
+        .el-dialog {
+            width: 96vw !important;
+            margin: 2vh auto !important;
         }
     }
 </style>

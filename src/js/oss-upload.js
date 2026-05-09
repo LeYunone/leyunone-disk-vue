@@ -4,30 +4,56 @@ const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks for multipart
 const SIMPLE_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // Files <= 5MB use simple upload
 
 /**
+ * Raw PUT to OSS using XMLHttpRequest.
+ * Sets Content-Type header to match the presigned URL signature.
+ * Also supports upload progress tracking.
+ */
+function putToOss(url, data, contentType, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", url, true);
+        // Set Content-Type to match the presigned URL signature
+        if (contentType) {
+            xhr.setRequestHeader("Content-Type", contentType);
+        }
+
+        if (onProgress) {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    onProgress(Math.round((e.loaded / e.total) * 100));
+                }
+            };
+        }
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve({
+                    status: xhr.status,
+                    etag: xhr.getResponseHeader("ETag")
+                });
+            } else {
+                reject(new Error("OSS PUT failed: " + xhr.status));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error("OSS PUT network error"));
+        xhr.send(data);
+    });
+}
+
+/**
  * OSS Direct Upload Utility
  * Handles presigned URL uploads and multipart uploads directly to OSS
  */
 const OssUpload = {
-    /**
-     * Upload a file directly to OSS using presigned URL
-     * Automatically chooses simple or multipart upload based on file size
-     *
-     * @param {File} file - The file to upload
-     * @param {Object} params - Upload parameters
-     * @param {string} params.md5 - File MD5 hash
-     * @param {number} params.folderId - Target folder ID
-     * @param {string} params.fileName - File name
-     * @param {string} params.fileType - File extension
-     * @param {Function} params.onProgress - Progress callback (0-100)
-     * @returns {Promise<void>}
-     */
     async upload(file, params) {
         const { md5, folderId, fileName, fileType, onProgress } = params;
+        const contentType = file.type || 'application/octet-stream';
 
         if (file.size <= SIMPLE_UPLOAD_THRESHOLD) {
-            await this.simpleUpload(file, { md5, folderId, fileName, fileType, onProgress });
+            await this.simpleUpload(file, { md5, folderId, fileName, fileType, contentType, onProgress });
         } else {
-            await this.multipartUpload(file, { md5, folderId, fileName, fileType, onProgress });
+            await this.multipartUpload(file, { md5, folderId, fileName, fileType, contentType, onProgress });
         }
     },
 
@@ -35,7 +61,7 @@ const OssUpload = {
      * Simple upload: Get presigned PUT URL, upload directly
      */
     async simpleUpload(file, params) {
-        const { md5, folderId, fileName, fileType, onProgress } = params;
+        const { md5, folderId, fileName, fileType, contentType, onProgress } = params;
 
         // 1. Get presigned URL from backend
         const presignRes = await axios.post("/disk/api/oss/presign", {
@@ -43,7 +69,8 @@ const OssUpload = {
             fileName: fileName,
             md5: md5,
             fileSize: file.size,
-            fileType: fileType
+            fileType: fileType,
+            contentType: contentType
         });
 
         if (!presignRes.data.success) {
@@ -52,16 +79,8 @@ const OssUpload = {
 
         const { presignedUrl, fileKey } = presignRes.data.result;
 
-        // 2. Upload file directly to OSS using presigned URL
-        await axios.put(presignedUrl, file, {
-            headers: { "Content-Type": "application/octet-stream" },
-            onUploadProgress: (progressEvent) => {
-                if (onProgress && progressEvent.total) {
-                    const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-                    onProgress(percent);
-                }
-            }
-        });
+        // 2. Upload file directly to OSS
+        await putToOss(presignedUrl, file, contentType, onProgress);
 
         // 3. Register file in backend database
         await axios.post("/disk/api/oss/register", {
@@ -80,7 +99,7 @@ const OssUpload = {
      * Multipart upload: Split into chunks, upload each with presigned URL, then complete
      */
     async multipartUpload(file, params) {
-        const { md5, folderId, fileName, fileType, onProgress } = params;
+        const { md5, folderId, fileName, fileType, contentType, onProgress } = params;
 
         // 1. Initiate multipart upload
         const initRes = await axios.post("/disk/api/oss/multipart/init", {
@@ -112,7 +131,8 @@ const OssUpload = {
             const presignRes = await axios.post("/disk/api/oss/multipart/presign", {
                 fileKey: fileKey,
                 uploadId: uploadId,
-                partNumber: partNumber
+                partNumber: partNumber,
+                contentType: contentType
             });
 
             if (!presignRes.data.success) {
@@ -122,12 +142,10 @@ const OssUpload = {
             const presignedUrl = presignRes.data.result;
 
             // Upload chunk to OSS
-            const uploadRes = await axios.put(presignedUrl, chunk, {
-                headers: { "Content-Type": "application/octet-stream" }
-            });
+            const uploadRes = await putToOss(presignedUrl, chunk, contentType);
 
-            // Get ETag from response headers
-            const eTag = uploadRes.headers.etag;
+            // Get ETag from response
+            const eTag = uploadRes.etag;
             if (eTag) {
                 partNumbers.push(partNumber);
                 partETags.push(eTag.replace(/"/g, ""));

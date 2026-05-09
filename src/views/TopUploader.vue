@@ -142,13 +142,9 @@
     import OssUpload from "../js/oss-upload"
 
     export default {
-        computed: {
-            isMobile() {
-                return window.innerWidth <= 768;
-            }
-        },
         data() {
             return {
+                isMobile: window.innerWidth <= 768,
                 folderTree: [],
                 nameCondition: "",
                 uploadTasks: [],
@@ -167,7 +163,12 @@
             }
         },
         mounted: function () {
+            this._resizeHandler = () => { this.isMobile = window.innerWidth <= 768; };
+            window.addEventListener('resize', this._resizeHandler);
             this.getFolderTree();
+        },
+        beforeUnmount() {
+            window.removeEventListener('resize', this._resizeHandler);
         },
         methods: {
             handleBusDiskInfo() {
@@ -536,19 +537,55 @@
             border-radius: 12px;
             padding: 10px 12px;
         }
+
+        .input-line {
+            display: block;
+            margin-left: 0;
+            margin-bottom: 10px;
+        }
+
+        .block {
+            display: block;
+        }
+
+        /* Make cascader and upload full width */
+        :deep(.el-cascader) {
+            width: 100%;
+        }
+
+        :deep(.el-upload) {
+            width: 100%;
+        }
+
+        :deep(.el-upload-dragger) {
+            width: 100%;
+        }
     }
 
     @media (max-width: 480px) {
         .upload-toolbar {
-            padding: 8px 0;
+            padding: 6px 0;
         }
 
-        .toolbar-actions :deep(.el-button span) {
+        .toolbar-actions {
+            gap: 6px;
+        }
+
+        /* Icon-only circular buttons on small screens */
+        .toolbar-actions :deep(.el-button.is-round) {
+            padding: 8px;
+            min-width: 36px;
+            width: 36px;
+            height: 36px;
+        }
+
+        .toolbar-actions :deep(.el-button.is-round span) {
             display: none;
         }
 
-        .toolbar-actions :deep(.el-button .el-icon) {
+        .toolbar-actions :deep(.el-button.is-round .el-icon) {
             margin: 0;
+            font-size: 18px;
         }
     }
 </style>

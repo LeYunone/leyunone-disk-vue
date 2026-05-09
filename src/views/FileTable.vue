@@ -54,21 +54,22 @@
         </div>
 
         <!-- File Table -->
+        <div class="table-scroll-wrapper">
         <el-table
             v-if="fileList.length > 0 || loadTable"
             @selection-change="selectionLineChangeHandle"
             v-loading="loadTable"
             :data="fileList"
             fit
-            max-height="560px"
+            :max-height="isMobile ? '70vh' : 560"
             ref="fileTableRef"
             size="default"
             class="file-table">
-            <el-table-column type="selection" width="50" />
-            <el-table-column width="50">
+            <el-table-column type="selection" :width="isMobile ? 36 : 50" />
+            <el-table-column :width="isMobile ? 40 : 50">
                 <template #default="scope">
                     <div class="file-icon" :class="getIconClass(scope.row)">
-                        <el-icon :size="18">
+                        <el-icon :size="isMobile ? 16 : 18">
                             <Folder v-if="scope.row.folder" />
                             <Picture v-else-if="scope.row.fileType===1" />
                             <Headset v-else-if="scope.row.fileType===2" />
@@ -83,7 +84,7 @@
                 prop="name"
                 label="文件名"
                 show-overflow-tooltip
-                min-width="320">
+                :min-width="isMobile ? 120 : 320">
                 <template #default="scope">
                     <span v-if="scope.row.folder" @click="goRouter(scope.row.folderId)" class="folder-link">
                         {{scope.row.folderName}}
@@ -93,11 +94,11 @@
                     </span>
                 </template>
             </el-table-column>
-            <el-table-column prop="updateDt" label="更新时间" width="165" />
-            <el-table-column prop="fileSize" label="大小" width="120" />
-            <el-table-column fixed="right" label="操作" width="240">
+            <el-table-column v-if="!isMobile" prop="updateDt" label="更新时间" width="165" />
+            <el-table-column v-if="!isMobile" prop="fileSize" label="大小" width="120" />
+            <el-table-column fixed="right" label="操作" :width="isMobile ? 110 : 240">
                 <template #default="scope">
-                    <el-button v-if="scope.row.fileType===1" type="primary" link size="small"
+                    <el-button v-if="!isMobile && scope.row.fileType===1" type="primary" link size="small"
                         @click="copyToClipboard(scope.row.filePath)">复制路径</el-button>
                     <el-button v-if="!scope.row.folder" type="primary" link size="small"
                         @click="openFileDrawer(scope.row.fileId)">详情</el-button>
@@ -108,6 +109,7 @@
                 </template>
             </el-table-column>
         </el-table>
+        </div>
 
         <!-- Footer: Delete selected + Pagination -->
         <div class="table-footer">
@@ -118,7 +120,7 @@
                 v-model:current-page="pageData.index"
                 v-model:page-size="pageData.size"
                 :page-sizes="[10, 20, 50, 100, 500]"
-                layout="total, sizes, prev, pager, next, jumper"
+                :layout="isMobile ? 'prev, pager, next' : 'total, sizes, prev, pager, next, jumper'"
                 :total="pageData.total"
                 @size-change="diskInfo"
                 @current-change="diskInfo"
@@ -164,13 +166,9 @@
     import bus from "../js/bus"
 
     export default {
-        computed: {
-            isMobile() {
-                return window.innerWidth <= 768;
-            }
-        },
         data() {
             return {
+                isMobile: window.innerWidth <= 768,
                 fileList: [],
                 fileFolderId: "",
                 fileDrawer: false,
@@ -193,6 +191,8 @@
             }
         },
         mounted: function () {
+            this._resizeHandler = () => { this.isMobile = window.innerWidth <= 768; };
+            window.addEventListener('resize', this._resizeHandler);
             this.loadParams();
             this.diskInfo();
             axios({
@@ -206,6 +206,9 @@
             bus.on("diskInfo", () => {
                 this.diskInfo();
             });
+        },
+        beforeUnmount() {
+            window.removeEventListener('resize', this._resizeHandler);
         },
         methods: {
             getIconClass(row) {
@@ -490,21 +493,27 @@
     @media (max-width: 768px) {
         .file-table-container {
             border-radius: 14px;
-            padding: 12px;
+            padding: 10px;
             padding-top: 4px;
+            overflow: visible;
         }
 
         .wave-decoration {
-            margin: 0 -12px 6px;
-            height: 24px;
+            margin: 0 -10px 4px;
+            height: 20px;
         }
 
         .wave-decoration svg {
-            height: 24px;
+            height: 20px;
+        }
+
+        .nav-breadcrumb {
+            margin-bottom: 10px;
+            padding: 4px 0;
         }
 
         .empty-state {
-            padding: 24px 12px;
+            padding: 20px 8px;
         }
 
         .empty-character {
@@ -512,39 +521,47 @@
             height: 120px;
         }
 
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -10px;
+            padding: 0 10px;
+        }
+
         .table-footer {
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
             align-items: stretch;
+            margin-top: 12px;
         }
 
         .table-footer :deep(.el-pagination) {
             justify-content: center;
-            flex-wrap: wrap;
         }
 
         .corner-sticker {
             display: none;
         }
 
-        :deep(.file-table) {
-            min-width: 0;
+        .file-icon {
+            width: 30px;
+            height: 30px;
         }
 
-        :deep(.file-table .el-table__body-wrapper) {
-            overflow-x: auto;
-        }
-
-        :deep(.file-table .el-table__body) {
-            min-width: 600px;
+        .folder-link, .file-link {
+            font-size: 13px;
         }
     }
 
     @media (max-width: 480px) {
         .file-table-container {
-            border-radius: 12px;
-            padding: 8px;
-            padding-top: 4px;
+            border-radius: 10px;
+            padding: 6px;
+            padding-top: 2px;
+        }
+
+        .wave-decoration {
+            margin: 0 -6px 2px;
         }
 
         .empty-character {
