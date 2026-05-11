@@ -28,8 +28,8 @@
             <ellipse cx="60" cy="62" rx="8" ry="7" fill="rgba(255,255,255,0.5)"/>
             <ellipse cx="50" cy="74" rx="10" ry="7" fill="rgba(255,255,255,0.5)"/>
             <!-- Sparkle -->
-            <path d="M82 18 L84 12 L86 18 L92 20 L86 22 L84 28 L82 22 L76 20 Z" fill="#ffd700" opacity="0.8"/>
-            <path d="M20 14 L21 10 L22 14 L26 15 L22 16 L21 20 L20 16 L16 15 Z" fill="#ff6b9d" opacity="0.7"/>
+            <path d="M82 18 L84 12 L86 18 L92 20 L86 22 L84 28 L82 22 L76 20 Z" fill="#8AB4A0" opacity="0.6"/>
+            <path d="M20 14 L21 10 L22 14 L26 15 L22 16 L21 20 L20 16 L16 15 Z" fill="#C4956A" opacity="0.5"/>
         </svg>
     </div>
 </template>
@@ -53,7 +53,7 @@ export default {
         },
         color: {
             type: String,
-            default: '#c44dff'
+            default: '#5B8C6E'
         }
     },
     computed: {
@@ -101,6 +101,6 @@ export default {
 }
 
 .sticker-default {
-    filter: drop-shadow(0 2px 8px rgba(196, 77, 255, 0.2));
+    filter: drop-shadow(0 2px 8px rgba(91, 140, 110, 0.15));
 }
 </style>

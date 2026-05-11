@@ -1,7 +1,8 @@
 import axios from "axios";
 
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks for multipart
-const SIMPLE_UPLOAD_THRESHOLD = 5 * 1024 * 1024; // Files <= 5MB use simple upload
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
+const SIMPLE_UPLOAD_THRESHOLD = 20 * 1024 * 1024; // Files <= 20MB use simple upload
+const CONCURRENT_CHUNKS = 3; // Upload 3 chunks concurrently
 
 /**
  * Raw PUT to OSS using XMLHttpRequest.
@@ -79,7 +80,7 @@ const OssUpload = {
 
         const { presignedUrl, fileKey } = presignRes.data.result;
 
-        // 2. Upload file directly to OSS
+        // 2. Upload file directly to OSS with real-time progress
         await putToOss(presignedUrl, file, contentType, onProgress);
 
         // 3. Register file in backend database
@@ -96,7 +97,7 @@ const OssUpload = {
     },
 
     /**
-     * Multipart upload: Split into chunks, upload each with presigned URL, then complete
+     * Multipart upload with concurrent chunk transfer and byte-level progress
      */
     async multipartUpload(file, params) {
         const { md5, folderId, fileName, fileType, contentType, onProgress } = params;
@@ -116,16 +117,35 @@ const OssUpload = {
 
         const { uploadId, fileKey } = initRes.data.result;
 
-        // 2. Split file into chunks and upload each
+        // 2. Split file into chunks
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        const partNumbers = [];
-        const partETags = [];
+        const uploadedBytes = { value: 0 };
+        const parts = new Array(totalChunks); // { partNumber, eTag }
 
-        for (let i = 0; i < totalChunks; i++) {
-            const start = i * CHUNK_SIZE;
+        // Byte-level progress callback for each chunk
+        const onChunkProgress = (chunkIndex, chunkLoaded, chunkTotal) => {
+            // Recalculate total progress: (sum of all completed chunks + current chunk progress) / total file size
+            let completedBytes = 0;
+            for (let i = 0; i < totalChunks; i++) {
+                if (parts[i]) {
+                    // This chunk is fully uploaded
+                    const size = Math.min((i + 1) * CHUNK_SIZE, file.size) - i * CHUNK_SIZE;
+                    completedBytes += size;
+                } else if (i === chunkIndex) {
+                    completedBytes += chunkLoaded;
+                }
+            }
+            if (onProgress) {
+                onProgress(Math.min(Math.round((completedBytes / file.size) * 100), 99));
+            }
+        };
+
+        // 3. Upload chunks with concurrency control
+        const uploadChunk = async (chunkIndex) => {
+            const start = chunkIndex * CHUNK_SIZE;
             const end = Math.min(start + CHUNK_SIZE, file.size);
             const chunk = file.slice(start, end);
-            const partNumber = i + 1;
+            const partNumber = chunkIndex + 1;
 
             // Get presigned URL for this chunk
             const presignRes = await axios.post("/disk/api/oss/multipart/presign", {
@@ -136,29 +156,47 @@ const OssUpload = {
             });
 
             if (!presignRes.data.success) {
-                throw new Error("Failed to get part presigned URL");
+                throw new Error("Failed to get part presigned URL for chunk " + partNumber);
             }
 
             const presignedUrl = presignRes.data.result;
 
-            // Upload chunk to OSS
-            const uploadRes = await putToOss(presignedUrl, chunk, contentType);
+            // Upload chunk with byte-level progress
+            const uploadRes = await putToOss(presignedUrl, chunk, contentType, (pct) => {
+                onChunkProgress(chunkIndex, Math.round((pct / 100) * chunk.size), chunk.size);
+            });
 
-            // Get ETag from response
+            // Store result
             const eTag = uploadRes.etag;
-            if (eTag) {
-                partNumbers.push(partNumber);
-                partETags.push(eTag.replace(/"/g, ""));
+            if (!eTag) {
+                throw new Error("No ETag returned for chunk " + partNumber);
             }
+            parts[chunkIndex] = {
+                partNumber: partNumber,
+                eTag: eTag.replace(/"/g, "")
+            };
+        };
 
-            // Report progress
-            if (onProgress) {
-                const percent = Math.round(((i + 1) / totalChunks) * 100);
-                onProgress(percent);
+        // Concurrent upload with pool
+        let nextChunkIndex = 0;
+        const runWorker = async () => {
+            while (nextChunkIndex < totalChunks) {
+                const idx = nextChunkIndex++;
+                await uploadChunk(idx);
             }
+        };
+
+        const workers = [];
+        const concurrency = Math.min(CONCURRENT_CHUNKS, totalChunks);
+        for (let w = 0; w < concurrency; w++) {
+            workers.push(runWorker());
         }
+        await Promise.all(workers);
 
-        // 3. Complete multipart upload
+        // 4. Complete multipart upload
+        const partNumbers = parts.map(p => p.partNumber);
+        const partETags = parts.map(p => p.eTag);
+
         await axios.post("/disk/api/oss/multipart/complete", {
             fileKey: fileKey,
             uploadId: uploadId,
@@ -166,7 +204,7 @@ const OssUpload = {
             partETags: partETags
         });
 
-        // 4. Register file in backend database
+        // 5. Register file in backend database
         await axios.post("/disk/api/oss/register", {
             folderId: folderId,
             fileName: fileName,

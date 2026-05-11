@@ -11,7 +11,6 @@
                         <el-dropdown-menu>
                             <el-dropdown-item @click="triggerFileInput(false)">上传文件</el-dropdown-item>
                             <el-dropdown-item @click="triggerFileInput(true)">上传文件夹</el-dropdown-item>
-                            <el-dropdown-item @click="uploadImgDrawer = true">发布图片</el-dropdown-item>
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
@@ -27,7 +26,7 @@
                     <span>新建文件夹</span>
                 </el-button>
                 <el-input
-                    placeholder="找找看有什么文件喵~"
+                    placeholder="喵~搜索文件..."
                     size="default"
                     v-model="nameCondition"
                     class="search-input"
@@ -37,6 +36,13 @@
                         <el-icon><Search /></el-icon>
                     </template>
                 </el-input>
+                <!-- Cat paw decoration -->
+                <svg class="toolbar-paw" width="22" height="22" viewBox="0 0 100 100" aria-hidden="true">
+                    <ellipse cx="50" cy="62" rx="22" ry="18" fill="#5B8C6E" opacity="0.12"/>
+                    <circle cx="34" cy="40" r="10" fill="#5B8C6E" opacity="0.1"/>
+                    <circle cx="50" cy="34" r="10" fill="#5B8C6E" opacity="0.1"/>
+                    <circle cx="66" cy="40" r="10" fill="#5B8C6E" opacity="0.1"/>
+                </svg>
             </div>
         </div>
 
@@ -58,8 +64,8 @@
                             <span class="upload-item-name">{{task.fileName}}</span>
                             <span class="upload-item-status" :class="task.status">
                                 <template v-if="task.status === 'uploading'">{{task.progress}}%</template>
-                                <template v-else-if="task.status === 'success'">完成 ✨</template>
-                                <template v-else-if="task.status === 'error'">失败 💦</template>
+                                <template v-else-if="task.status === 'success'">完成</template>
+                                <template v-else-if="task.status === 'error'">失败</template>
                                 <template v-else>等待中...</template>
                             </span>
                         </div>
@@ -83,6 +89,7 @@
         :before-close="uploadImgDrawerClose"
         class="fresh-dialog"
         :fullscreen="isMobile"
+        append-to-body
         round>
         <div class="block">
             <span class="input-line">
@@ -121,6 +128,7 @@
         width="420px"
         :before-close="folderDrawerClose"
         :fullscreen="isMobile"
+        append-to-body
         class="fresh-dialog">
         <el-form label-width="80px" label-position="top">
             <el-form-item label="目录名称">
@@ -162,6 +170,14 @@
                 newFolderName: "",
             }
         },
+        watch: {
+            nameCondition(val) {
+                clearTimeout(this._searchTimer);
+                this._searchTimer = setTimeout(() => {
+                    bus.emit("search", val || "");
+                }, 300);
+            }
+        },
         mounted: function () {
             this._resizeHandler = () => { this.isMobile = window.innerWidth <= 768; };
             window.addEventListener('resize', this._resizeHandler);
@@ -169,6 +185,7 @@
         },
         beforeUnmount() {
             window.removeEventListener('resize', this._resizeHandler);
+            clearTimeout(this._searchTimer);
         },
         methods: {
             handleBusDiskInfo() {
@@ -204,6 +221,9 @@
                     file: file
                 };
                 this.uploadTasks.push(task);
+                // 获取 Vue proxy 代理后的引用，后续修改才能触发响应式更新
+                const idx = this.uploadTasks.length - 1;
+                const reactiveTask = this.uploadTasks[idx];
 
                 // Calculate MD5 then upload
                 this.calculateMD5(file).then(md5 => {
@@ -215,21 +235,21 @@
                     }).then(res => {
                         const data = res.data;
                         if (!data.success) {
-                            task.status = 'error';
+                            reactiveTask.status = 'error';
                             ElMessage.error(data.message);
                             return;
                         }
                         const responseType = data.result.responseType;
                         if (responseType === 0) {
                             // File already exists (dedup / 秒传)
-                            task.progress = 100;
-                            task.status = 'success';
-                            ElMessage.success("文件已存在，秒传成功");
+                            reactiveTask.progress = 100;
+                            reactiveTask.status = 'success';
+                            ElMessage.success("文件已存在，秒传成功喵~");
                             this.handleBusDiskInfo();
                             return;
                         }
                         // New file - upload via presigned URL
-                        task.status = 'uploading';
+                        reactiveTask.status = 'uploading';
                         const extension = file.name.substring(file.name.lastIndexOf('.') + 1);
                         return OssUpload.upload(file, {
                             md5: md5,
@@ -237,17 +257,17 @@
                             fileName: file.name,
                             fileType: extension,
                             onProgress: (percent) => {
-                                task.progress = percent;
+                                reactiveTask.progress = percent;
                             }
                         }).then(() => {
-                            task.status = 'success';
-                            task.progress = 100;
-                            ElMessage.success(`${file.name} 上传完成`);
+                            reactiveTask.status = 'success';
+                            reactiveTask.progress = 100;
+                            ElMessage.success(`${file.name} 上传完成喵~`);
                             this.handleBusDiskInfo();
                         });
                     });
                 }).catch(err => {
-                    task.status = 'error';
+                    reactiveTask.status = 'error';
                     console.error('Upload error:', err);
                     ElMessage.error(`${file.name} 上传失败`);
                 });
@@ -377,23 +397,35 @@
         gap: 10px;
     }
 
+    .toolbar-paw {
+        flex-shrink: 0;
+        animation: pawWave 3s ease-in-out infinite;
+        opacity: 0.6;
+    }
+
+    @keyframes pawWave {
+        0%, 100% { transform: rotate(0deg) scale(1); }
+        25% { transform: rotate(-8deg) scale(1.05); }
+        75% { transform: rotate(8deg) scale(1.05); }
+    }
+
     .search-input {
         width: 240px;
     }
 
     .search-input :deep(.el-input__wrapper) {
-        border-radius: 20px;
+        border-radius: 8px;
         background: rgba(255, 255, 255, 0.8);
-        border: 1.5px solid rgba(196, 77, 255, 0.15);
+        border: 1px solid rgba(91, 140, 110, 0.12);
     }
 
     /* Upload Progress Panel */
     .upload-panel {
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 254, 250, 0.94);
         backdrop-filter: blur(8px);
-        border-radius: 16px;
-        border: 2px dashed rgba(196, 77, 255, 0.18);
-        box-shadow: 0 4px 20px rgba(196, 77, 255, 0.08);
+        border-radius: 10px;
+        border: 1px dashed rgba(91, 140, 110, 0.15);
+        box-shadow: 0 2px 12px rgba(91, 140, 110, 0.06);
         padding: 12px 16px;
         margin-top: 8px;
         position: relative;
@@ -401,15 +433,7 @@
     }
 
     .panel-corner-star {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        animation: twinkle 2s ease-in-out infinite;
-    }
-
-    @keyframes twinkle {
-        0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        50% { opacity: 0.5; transform: scale(0.7) rotate(20deg); }
+        display: none;
     }
 
     .panel-header {
@@ -422,7 +446,7 @@
     .panel-title {
         font-size: 13px;
         font-weight: 500;
-        color: #8c5c8a;
+        color: #5c6e5e;
     }
 
     .upload-list {
@@ -432,7 +456,7 @@
 
     .upload-item {
         padding: 8px 0;
-        border-bottom: 1px solid rgba(196, 77, 255, 0.06);
+        border-bottom: 1px solid rgba(91, 140, 110, 0.06);
     }
 
     .upload-item:last-child {
@@ -448,7 +472,7 @@
 
     .upload-item-name {
         font-size: 13px;
-        color: #4a3548;
+        color: #3a4a3c;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -461,29 +485,29 @@
     }
 
     .upload-item-status.uploading {
-        color: #c44dff;
+        color: #5B8C6E;
     }
 
     .upload-item-status.success {
-        color: #ff6b9d;
+        color: #8AB4A0;
     }
 
     .upload-item-status.error {
-        color: #e74c8b;
+        color: #c0392b;
     }
 
     .upload-item-status.pending {
-        color: #b07cc6;
+        color: #A08C74;
     }
 
     .upload-icon {
         font-size: 28px;
-        color: #c44dff;
+        color: #5B8C6E;
     }
 
     .upload-img-url {
         padding: 10px 0;
-        color: #b07cc6;
+        color: #8a9b8a;
         font-size: 13px;
     }
 
@@ -494,7 +518,7 @@
     /* Slide-down transition */
     .slide-down-enter-active,
     .slide-down-leave-active {
-        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        transition: all 0.3s ease;
         max-height: 300px;
         overflow: hidden;
     }
@@ -508,13 +532,13 @@
 
     /* Fresh dialog styling */
     :deep(.fresh-dialog .el-dialog) {
-        border-radius: 20px;
+        border-radius: 12px;
     }
 
     :deep(.fresh-dialog .el-dialog__header) {
         padding: 16px 20px;
-        border-bottom: 2px dashed rgba(196, 77, 255, 0.12);
-        background: linear-gradient(135deg, rgba(255, 107, 157, 0.06), rgba(196, 77, 255, 0.06));
+        border-bottom: 1px solid rgba(91, 140, 110, 0.08);
+        background: rgba(91, 140, 110, 0.03);
     }
 
     :deep(.fresh-dialog .el-dialog__body) {
@@ -534,7 +558,7 @@
         }
 
         .upload-panel {
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 10px 12px;
         }
 
@@ -548,7 +572,6 @@
             display: block;
         }
 
-        /* Make cascader and upload full width */
         :deep(.el-cascader) {
             width: 100%;
         }
@@ -571,7 +594,6 @@
             gap: 6px;
         }
 
-        /* Icon-only circular buttons on small screens */
         .toolbar-actions :deep(.el-button.is-round) {
             padding: 8px;
             min-width: 36px;
